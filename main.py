@@ -19,22 +19,23 @@ def setup(ctx):
         module.OctoChannel,
         label="Octo",
         icon=ICON_URL,
-        intro_url="https://github.com/Mininglamp-OSS/octo-docs",
+        intro_url="https://github.com/ideshun/octop-channel-octo",
         fields=[
-            {
-                "name": "bot_token",
-                "label": "Bot Token",
-                "type": "password",
-                "required": True,
-                "placeholder": "在 Octo BotFather 创建机器人获取 Token",
-                "helpKey": DESCRIPTION,
-            },
             {
                 "name": "api_url",
                 "label": "API URL",
                 "required": True,
                 "defaultValue": "https://im.deepminer.com.cn/api",
                 "placeholder": "https://im.deepminer.com.cn/api",
+                "helpKey": "Octo 服务的 API 基址，以 /api 结尾，不含查询参数或片段；自托管时修改此项。",
+            },
+            {
+                "name": "bot_token",
+                "label": "Bot Token",
+                "type": "password",
+                "required": True,
+                "placeholder": "在 Octo BotFather 创建机器人获取 Token",
+                "helpKey": "在对应 Octo 服务的 BotFather 创建机器人并获取 Token，请勿公开或提交到代码仓库。",
             },
             {
                 "name": "admins",
@@ -48,7 +49,7 @@ def setup(ctx):
                 "label": "仅回复管理员",
                 "type": "switch",
                 "defaultValue": False,
-                "helpKey": "channels.octo_owner_only_help",
+                "helpKey": "开启后仅 Bot 所有者和管理员 UID 列表中的用户可触发回复，对私聊和群聊均生效。",
             },
             {
                 "name": "group_whitelist",
@@ -59,11 +60,11 @@ def setup(ctx):
             },
             {
                 "name": "require_mention",
-                "label": "群聊仅 @ 唤醒",
+                "label": "仅回复 @机器人的群消息",
                 "type": "switch",
                 "defaultValue": True,
                 "legacyDefaultValue": True,
-                "helpKey": "channels.octo_require_mention_help",
+                "helpKey": "开启后，普通群消息不触发回复；启用群聊上下文时仍可作为上下文记录。私聊不受此开关影响，管理员权限限制仍然生效。",
             },
             {
                 "name": "history_limit",
@@ -77,6 +78,7 @@ def setup(ctx):
                 "label": "忽略 @所有人",
                 "type": "switch",
                 "defaultValue": False,
+                "helpKey": "开启后，群聊中的 @所有人 不作为唤醒机器人的依据；直接 @机器人仍按其他规则处理。",
             },
             {
                 "name": "show_typing",
@@ -84,6 +86,7 @@ def setup(ctx):
                 "type": "switch",
                 "defaultValue": True,
                 "legacyDefaultValue": True,
+                "helpKey": "处理消息期间向 Octo 发送正在输入提示。",
             },
             {
                 "name": "heartbeat_interval",

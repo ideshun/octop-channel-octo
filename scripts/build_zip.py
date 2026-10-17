@@ -9,6 +9,8 @@ FILES = (
     "main.py",
     "plugin.yaml",
     "README.md",
+    "README.en.md",
+    "docs/OPERATIONS.md",
     "LICENSE",
     "NOTICE",
     "CHANGELOG.md",

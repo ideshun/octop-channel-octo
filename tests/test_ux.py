@@ -101,6 +101,12 @@ def test_complete_manifest_and_schema():
     assert fields["require_mention"]["defaultValue"] is True
     assert fields["history_limit"]["defaultValue"] == "10"
     assert fields["api_url"]["defaultValue"] == str(OctoConfig().api_url)
+    assert captured["intro_url"] == "https://github.com/ideshun/octop-channel-octo"
+    assert list(fields)[:2] == ["api_url", "bot_token"]
+    assert fields["require_mention"]["label"] == "仅回复 @机器人的群消息"
+    assert all(f.get("helpKey") for f in fields.values())
+    assert "私聊不受" in fields["require_mention"]["helpKey"]
+    assert "上下文" in fields["require_mention"]["helpKey"]
     assert fields["admins"]["helpKey"]
     assert fields["owner_only"]["helpKey"]
     assert {f["name"] for f in fields.values() if f.get("required")} == {

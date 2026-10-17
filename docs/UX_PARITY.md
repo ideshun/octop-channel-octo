@@ -1,38 +1,24 @@
-# Octo 0.1.1 UX parity evidence
+# Octo 0.1.1 界面修复说明
 
-The previous 0.1.0 registration exposed seven fields and required state_dir. That was a UX regression. Version 0.1.1 registers twelve ordinary fields and removes state_dir from the form.
+插件本地源码目录：`/data/.octop/agents/assistant/generated/octop-channel-octo-repo`。
+宿主本地工作树：`/data/.octop/agents/assistant/generated/octo-plugin-ux-host`。
 
-| Setting | Previous registration / legacy dashboard | 0.1.1 registration and runtime |
-| --- | --- | --- |
-| Plugin icon | Missing | Exact requested avatar URL in plugin.yaml |
-| Channel icon | Missing registration | Same exact URL passed to ctx.channel(icon=...) |
-| Description | Short delivery implementation text | 配置 Octo IM 机器人频道，支持私聊与群聊，实时 WebSocket 接入，需在 Octo BotFather 创建机器人获取 Token。 |
-| Bot Token | Password, required | Password, required; BotFather guidance |
-| API URL | Required, no default | https://im.deepminer.com.cn/api |
-| Admins | No helper | Extra UIDs; bot owner always admin |
-| owner_only | No helper | false; existing localized explanation |
-| Group whitelist | Bare label | Empty allows all; parent group allows topics |
-| require_mention | Missing plugin field; legacy UI had switch | true, with existing localized explanation |
-| history_limit | Missing plugin field; legacy UI had text input | 10, range 0–100, 0 disables |
-| ignore_mention_all | Missing | false |
-| show_typing | Missing | true |
-| heartbeat_interval | Missing | 30 seconds, range 10–300 |
-| poll_interval | Missing | 5 seconds, range 2–300 |
-| allowed_hosts | Bare label | Empty; exact host helper and example |
-| state_dir | Mandatory UI input | Automatic OCTOP_HOME/plugin-state/octo or ~/.octop/plugin-state/octo; optional JSON override |
+## 插件注册
 
-Production legacy `/data/.octop/plugins/octo-channel/main.py` was inspected read-only: it directly modifies the gateway registry and has no field schema. The installed dashboard bundle contains the legacy Octo seven-field form (token, API, admins, owner_only, whitelist, require_mention, history_limit) and localized descriptions. The legacy Chinese intro uses a semicolon after WebSocket 接入; the requested plugin description uses a comma exactly.
+`plugin.yaml` 提供完整 description 和 icon。`main.py` 仅使用真实支持的 `ctx.channel(kind, channel_cls, label, icon, intro_url, fields)`；没有虚构 description 或 intro_label 参数，也不访问私有 manifest。
 
-## Verified host limitations
+说明入口指向 https://github.com/ideshun/octop-channel-octo 。API URL 排在 Bot Token 前面。全部 12 个普通配置字段提供 helpKey 文案，包含“仅回复 @机器人的群消息”的普通群消息、被动上下文、私聊及管理员权限边界。state_dir 不出现在表单中，由运行时自动管理。
 
-Installed harness PluginContext.channel accepts only kind, channel_cls, label, icon, intro_url and fields. PluginContext has no public manifest property; `_manifest` is private. LoadedPlugin.manifest.description is available to the host via PluginRegistry.get(plugin_id), so a host bridge can expose it without changing the harness API.
+## 实际宿主链路与本地修改
 
-The real host bridge PluginChannelInfo.to_dict omits description. Fields pass through unmodified to JSON, but the installed dashboard registerPluginChannelKind maps only name, label, type, placeholder and required. It drops helpKey, defaultValue and legacyDefaultValue. It also rejects a plugin kind already present in CHANNEL_KEYS, including the locally retained legacy Octo kind. ChannelCard and ChannelDrawer intros use translation keys instead of plugin metadata. PluginManager separately reads plugin.yaml icon and description correctly.
+原版 b9 的 PluginChannelInfo 不输出 description；前端注册函数丢弃 helpKey/defaultValue/legacyDefaultValue，卡片仅查询 channels.intro_<kind>，缺失时回退为标签“Octo”。PluginManager 的插件卡片与 Agent 的频道卡片是不同渲染链路，修改插件注册标签无法解决后者。
 
-A separate unapplied host patch is prepared at:
+宿主修改通过 `PluginRegistry.get(plugin_id).manifest.description` 读取加载后的 manifest，随 `/plugin-kinds` 目录输出；前端保存为 CHANNEL_DESCRIPTIONS，ChannelCard 和 ChannelDrawer 优先渲染该描述。此逻辑适用于所有频道插件。内置类型不可被覆盖；运行时残留的旧版同名条目可被正式插件目录覆盖，卸载时恢复原元数据。
 
-`/data/.octop/agents/assistant/generated/octop-octo-ux-host-patch/octo-ux.patch`
+前端保留字段默认值及旧配置缺失值，显式保存的 false 不被覆盖。字段帮助在标签旁显示问号图标，通过 Tooltip 悬停/聚焦查看，支持 switch、text、password、textarea、json，不再作为常驻段落放在控件下方。宿主对已注册插件使用“查看配置说明”，内置频道保留原凭据入口；不增加 intro_label API。
 
-It bridges the owning loaded manifest description, preserves field help/default metadata, renders plugin description on card/drawer, and temporarily overlays existing catalogue entries while restoring them on plugin unload. Python changes target the installed bridge; dashboard changes target the b9 source checkout in octop-b9-upgrade/Octop. This is a reviewable host source patch, not a runtime plugin monkey patch. It needs a host dashboard rebuild and host release/application before full visible parity is available.
+## 验证边界
 
-The actual isolated loader JSON is captured outside the distributable in the adjacent host-patch directory. Browser verification was attempted but Chrome/Chromium is unavailable. No production plugin, channel, token or configuration was modified.
+测试覆盖真实插件加载器读取临时 manifest 后的描述目录输出、前端目录注册与旧版覆盖恢复、卡片实际描述渲染、字段悬停提示，以及默认值保存。它们是离线测试和 DOM 渲染测试，不是正在运行的生产 UI 验收。
+
+此宿主工作树没有应用到生产，也没有安装插件、重启服务或注册真实 Bot。需要后续审核并应用宿主源码和构建产物才会改变运行中的界面。真实 Octo 联调仍未完成。准确命令与结果另存于本工作树 docs/LOCAL_UX_VALIDATION.md。

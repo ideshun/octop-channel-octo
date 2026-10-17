@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Add matching Chinese/English READMEs with web ZIP/URL installation and Linux/macOS availability.
+- Put API URL before Bot Token, clarify mention-only behavior, and link configuration help to this repository.
+- Supply help text for configuration tooltips; document the companion host rendering requirement.
+
 - Restore exact plugin/channel avatar and full plugin description.
 - Restore the complete channel form, helpers and defaults, including mention and history controls.
 - Automatically persist state under OCTOP_HOME or ~/.octop; keep bot scope stable across token rotation.
