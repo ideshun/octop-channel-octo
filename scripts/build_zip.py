@@ -27,7 +27,7 @@ FILES = (
 
 
 def build(output: Path | None = None) -> Path:
-    output = output or ROOT / "dist/octop-channel-octo-0.1.1.zip"
+    output = output or ROOT / "dist/octop-channel-octo-0.1.2.zip"
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in FILES:

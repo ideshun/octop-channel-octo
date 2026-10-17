@@ -1,10 +1,14 @@
 # Changelog
 
-## 0.1.1
+## 0.1.2
 
+- Publish a regular release containing the changes made after the v0.1.1 preview archive.
 - Add matching Chinese/English READMEs with web ZIP/URL installation and Linux/macOS availability.
 - Put API URL before Bot Token, clarify mention-only behavior, and link configuration help to this repository.
-- Supply help text for configuration tooltips; document the companion host rendering requirement.
+- Supply help text for configuration tooltips; document the companion host rendering requirement (Octop #2162).
+- Include both READMEs and operational documentation in the installation archive.
+
+## 0.1.1
 
 - Restore exact plugin/channel avatar and full plugin description.
 - Restore the complete channel form, helpers and defaults, including mention and history controls.
