@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1
+
+- Restore exact plugin/channel avatar and full plugin description.
+- Restore the complete channel form, helpers and defaults, including mention and history controls.
+- Automatically persist state under OCTOP_HOME or ~/.octop; keep bot scope stable across token rotation.
+- Validate optional absolute state directory overrides; remove the mandatory UI directory field.
+- Document b9 dashboard metadata gaps and provide a separate, unapplied compatible host patch.
+
 ## 0.1.0
 
 - Standalone channel plugin targeting Octop 1.0.2b9 / gateway 1.0.3 / harness 1.0.4.

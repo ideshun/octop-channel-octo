@@ -14,6 +14,7 @@ FILES = (
     "CHANGELOG.md",
     "pyproject.toml",
     "docs/PROVENANCE.md",
+    "docs/UX_PARITY.md",
     "octo_channel_impl/__init__.py",
     "octo_channel_impl/api.py",
     "octo_channel_impl/channel.py",
@@ -24,7 +25,7 @@ FILES = (
 
 
 def build(output: Path | None = None) -> Path:
-    output = output or ROOT / "dist/octop-channel-octo-0.1.0.zip"
+    output = output or ROOT / "dist/octop-channel-octo-0.1.1.zip"
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in FILES:

@@ -1,6 +1,6 @@
 # Octo channel for Octop
 
-Standalone `kind: channel` plugin for Octo private chats, groups and community topics. Includes text, image, voice, video and file payloads, mention/access gates, group context, WuKongIM WebSocket reception and durable REST event fallback. No host source patches are required.
+Standalone `kind: channel` plugin for Octo private chats, groups and community topics. Includes text, image, voice, video and file payloads, mention/access gates, group context, WuKongIM WebSocket reception and durable REST event fallback. The channel runs without host source patches; b9 dashboard metadata limitations are documented below.
 
 Targets Python 3.12+ on Linux with Octop **1.0.2b9**, gateway **1.0.3**, harness **1.0.4** (or compatible later releases). The host must expose `PluginContext.channel` and gateway channel registration/unregistration. Dependencies are listed in `plugin.yaml`; they are installed by the host plugin manager. `pyproject.toml` supplies developer tooling; this is a host plugin directory, not a pip-distributed wheel.
 
@@ -15,7 +15,7 @@ octop plugin list
 
 If the server is already running, use **Admin → Plugins → Reload** (`POST /api/plugins/reload`) or restart the server. The CLI `octop plugin reload` reloads only its own offline process; restart the server to apply it. Configure an Octo channel on the Agent channel page. The b9 CLI also accepts an HTTP(S) ZIP URL. It does **not** accept a local ZIP pathname: unpack it and install the directory. Use `--force` for an intentional reinstall of the same plugin ID.
 
-Required: `api_url`, `bot_token`, `state_dir`. Choose an absolute dedicated state directory on a persistent volume. Keep tokens in channel credentials, never in source control. `api_url` is the server base such as `https://octo.example/api`, without query or fragment.
+Required: `bot_token`. `api_url` defaults to `https://im.deepminer.com.cn/api`. Persistent state is automatic under `$OCTOP_HOME/plugin-state/octo`, or `~/.octop/plugin-state/octo` when `OCTOP_HOME` is unset. The existing API URL + bot ID hash subdirectory is preserved across token rotation. An optional JSON/API `state_dir` override must expand to an absolute directory (files and relative paths are rejected). Keep that directory on persistent storage. Keep tokens in channel credentials, never in source control. `api_url` is the server base such as `https://octo.example/api`, without query or fragment.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -30,9 +30,15 @@ Required: `api_url`, `bot_token`, `state_dir`. Choose an absolute dedicated stat
 | `heartbeat_interval` | 30 | Heartbeat seconds, 10–300 |
 | `show_typing` | true | Typing hints during processing |
 
-Advanced options may be supplied through the host JSON config/API. Integer UI strings and explicit boolean strings (`true/false`, `1/0`, `yes/no`, `on/off`) are validated; truthiness is never used to interpret `"false"`.
+All ordinary options above are registered in the channel form. The optional `state_dir` override is available through JSON/API only. Integer UI strings and explicit boolean strings (`true/false`, `1/0`, `yes/no`, `on/off`) are validated; truthiness is never used to interpret `"false"`.
 
 For a private self-hosted server, explicitly set e.g. `allowed_hosts: "octo.internal, files.internal, im.internal"`. This grants access to all resolved addresses of those exact hosts, including loopback; choose trusted server-controlled hosts only. Public destinations require HTTPS/WSS and globally routable DNS answers. HTTP and WS connections pin their validated DNS results, disable environment proxies, and retain TLS hostname verification. All HTTP redirects are refused, including presigned upload redirects, so bot Authorization headers cannot follow a redirect. Add the final storage host instead. Upload PUTs never include the bot token. Registration-provided API URLs do not replace the configured credential destination. Inbound media URLs are syntax/address-literal checked before passing to the host; host media consumers retain responsibility for their own DNS, redirects and download policy. Inline data URLs are not forwarded.
+
+## Update to 0.1.1
+
+Unpack `dist/octop-channel-octo-0.1.1.zip`, run `octop plugin install --force /absolute/path/octop-channel-octo`, then reload plugins in the running server or restart it. Keep any existing `state_dir` override to retain its inbox. The new automatic directory applies when no override is configured.
+
+On b9 the plugin card reads description/icon from `plugin.yaml`, and channel registration accepts `icon`, `intro_url`, and field dictionaries. There is no channel description argument or public `ctx.manifest` property. The shipped dashboard drops plugin `helpKey`/`defaultValue`/`legacyDefaultValue`, and its intro uses `channels.intro_octo` (legacy text with a semicolon). It can also reject plugin metadata for an already-known channel kind. Full visible parity needs the separate host patch described in `docs/UX_PARITY.md`; the plugin does not patch the host at runtime. Runtime defaults still apply without that patch.
 
 ## Delivery and state
 
@@ -58,7 +64,7 @@ ruff format --check .
 python scripts/build_zip.py
 ```
 
-The ZIP builder uses an explicit source allowlist, rejects symlinks and produces deterministic bytes. It excludes `.git`, credentials, state, caches and tests. Unpack the generated `dist/octop-channel-octo-0.1.0.zip` for local CLI installation. Tests use fake identities and offline fixtures; the host integration test loads the real PluginContext/loader/router only in a subprocess with temporary `OCTOP_HOME`. No real bot or production registration is used.
+The ZIP builder uses an explicit source allowlist, rejects symlinks and produces deterministic bytes. It excludes `.git`, credentials, state, caches and tests. Unpack the generated `dist/octop-channel-octo-0.1.1.zip` for local CLI installation. Tests use fake identities and offline fixtures; the host integration test loads the real PluginContext/loader/router only in a subprocess with temporary `OCTOP_HOME`. No real bot or production registration is used.
 
 Remaining validation: real-server WS/REST/media interoperability, server replay/retention semantics, load testing and migration rehearsal. urllib requests run in worker threads with bounded responses and timeouts; cancelling a coroutine cannot interrupt an already-running request. SQLite commits briefly occupy the event loop. These limits do not provide exactly-once execution of external side effects.
 

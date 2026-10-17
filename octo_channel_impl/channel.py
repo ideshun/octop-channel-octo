@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import hashlib
+import os
 from pathlib import Path
 import re
 import uuid
@@ -58,6 +59,28 @@ _NON_MESSAGE_EVENT_TYPES = frozenset(
 )
 
 
+def _state_directory(override: str = "") -> Path:
+    """Resolve persistent storage without deriving paths from credentials."""
+    if override:
+        path = Path(os.path.expandvars(override)).expanduser()
+    else:
+        home = os.environ.get("OCTOP_HOME")
+        base = (
+            Path(os.path.expandvars(home)).expanduser()
+            if home
+            else Path.home() / ".octop"
+        )
+        path = base / "plugin-state" / "octo"
+    if not path.is_absolute():
+        raise ValueError("state_dir must be an absolute directory after expansion")
+    # Validate existing components too: file/child and dangling symlinks are not folders.
+    for parent in (path, *path.parents):
+        if parent.is_symlink() or parent.exists():
+            if not parent.is_dir():
+                raise ValueError("state_dir must be a normal directory")
+    return path.resolve()
+
+
 @dataclass
 class OctoConfig(ChannelConfig):
     """Configuration for the Octo IM channel.
@@ -84,7 +107,7 @@ class OctoConfig(ChannelConfig):
     """
 
     bot_token: str = ""
-    api_url: str = ""
+    api_url: str = "https://im.deepminer.com.cn/api"
     require_mention: bool = True
     ignore_mention_all: bool = False
     heartbeat_interval: int = 30
@@ -150,6 +173,8 @@ class OctoConfig(ChannelConfig):
         ):
             if not isinstance(getattr(self, name), str):
                 raise ValueError(f"{name} must be a string")
+        if self.state_dir:
+            self.state_dir = str(_state_directory(self.state_dir))
         hosts = tuple(
             h.lower() for h in re.split(r"[,\s]+", self.allowed_hosts.strip()) if h
         )
@@ -307,10 +332,7 @@ class OctoChannel(BaseChannel):
             raise RuntimeError("OctoChannel: bot_token and api_url are required")
         self._stopping = False
 
-        if not self._config.state_dir:
-            raise ValueError(
-                "state_dir is required: select a persistent directory for this channel"
-            )
+        state_dir = _state_directory(self._config.state_dir)
         info = await asyncio.to_thread(
             octo_api.register_bot, self._config.api_url, self._config.bot_token
         )
@@ -320,7 +342,7 @@ class OctoChannel(BaseChannel):
         scope = hashlib.sha256(
             (self._config.api_url.rstrip("/") + "|" + info.robot_id).encode()
         ).hexdigest()[:32]
-        self._inbox = Inbox(Path(self._config.state_dir) / scope / "inbox.sqlite")
+        self._inbox = Inbox(state_dir / scope / "inbox.sqlite")
         self._poll_cursor = self._inbox.cursor()
         self._dispatch_task = asyncio.create_task(self._dispatch_loop())
         self._robot_id = info.robot_id

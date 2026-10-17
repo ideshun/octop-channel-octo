@@ -1,8 +1,9 @@
 id: octop-channel-octo
-version: 0.1.0
+version: 0.1.1
 name: Octo IM Channel
 kind: channel
-description: Octo 私聊、群组与话题通道，支持持久化接收、去重和 ACK 重试。
+description: 配置 Octo IM 机器人频道，支持私聊与群聊，实时 WebSocket 接入，需在 Octo BotFather 创建机器人获取 Token。
+icon: https://im.deepminer.com.cn/api/v1/users/28owvwbvxks35128dd4_bot/avatar?v=1792250160237
 entry: main.py
 requires:
   - websockets>=15,<16
