@@ -1,0 +1,9 @@
+octop-channel-octo
+
+Includes a modified Python port of the WuKongIM socket implementation from
+Mininglamp-OSS/openclaw-channel-octo (src/socket.ts), distributed under the
+Apache License, Version 2.0. REST endpoint/payload definitions also reference
+that project's API and types. See docs/PROVENANCE.md for pinned sources,
+checksums and modification details. A copy of the license is in LICENSE.
+
+No copyright owner or year is added on behalf of upstream authors.

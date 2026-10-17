@@ -1,0 +1,9 @@
+id: octop-channel-octo
+version: 0.1.0
+name: Octo IM Channel
+kind: channel
+description: Octo 私聊、群组与话题通道，支持持久化接收、去重和 ACK 重试。
+entry: main.py
+requires:
+  - websockets>=15,<16
+  - cryptography>=46,<50
