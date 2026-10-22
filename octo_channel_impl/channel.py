@@ -578,6 +578,11 @@ class OctoChannel(BaseChannel):
             "bot_mentioned": mentioned,
             "via": data.get("via", "ws"),
             "inbox_key": data.get("inbox_key", ""),
+            # Trust anchors for host-side access control. ``sender_is_owner`` is
+            # derived from the platform-registered bot owner UID (NOT from the
+            # admins list, NOT from display names or message text).
+            "sender_is_owner": bool(self._owner_uid) and from_uid == self._owner_uid,
+            "sender_is_admin": self._is_admin(from_uid),
         }
         if is_group:
             metadata["conversation_id"] = channel_id
