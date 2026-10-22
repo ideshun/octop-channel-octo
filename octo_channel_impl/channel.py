@@ -199,8 +199,12 @@ class OctoConfig(ChannelConfig):
                 raise ValueError("api_url must not contain a query")
         self.api_url = PolicyURL(self.api_url.rstrip("/"), policy)
         self.group_context = GroupContextConfig(
-            enabled=self.history_limit > 0,
-            history_limit=max(1, self.history_limit),
+            # Activation remains active even when history is disabled. This
+            # transport receives ordinary group traffic, not just mentions.
+            enabled=True,
+            visibility="all",
+            history="recent" if self.history_limit else "none",
+            history_limit=self.history_limit,
             activation="mention" if self.require_mention else "always",
         )
 
@@ -234,6 +238,18 @@ class OctoChannel(BaseChannel):
         self._inbox: Inbox | None = None
         self._dispatch_task: asyncio.Task[None] | None = None
         self._scheduled: set[str] = set()
+        self._awaiting_worker: str | None = None
+        self._handoff_since = 0.0
+        self._dispatch_wakeup = asyncio.Event()
+        self._notice_queue: asyncio.Queue[tuple[dict[str, Any], str]] = asyncio.Queue(
+            maxsize=64
+        )
+        self._notice_task: asyncio.Task[None] | None = None
+        self._notice_dropped = 0
+        self._notice_failures = 0
+        self._poll_failures = 0
+        self._last_poll_success: float | None = None
+        self._last_capacity_check = 0.0
         self._robot_id = ""
         self._owner_uid = ""
         self._ws: WKSocket | None = None
@@ -346,13 +362,62 @@ class OctoChannel(BaseChannel):
 
     @property
     def is_connected(self) -> bool:
-        return bool(self._ws is not None and self._ws.connected and not self._stopping)
+        failed = self._dispatch_task is not None and self._dispatch_task.done()
+        return bool(
+            self._ws is not None
+            and self._ws.connected
+            and not self._stopping
+            and not failed
+        )
 
     @property
     def runtime_error(self) -> str | None:
+        if self._dispatch_task is not None and self._dispatch_task.done():
+            return "octo_dispatch_failed"
+        if self._awaiting_worker and time.monotonic() - self._handoff_since > 30:
+            return "octo_gateway_handoff_stalled"
+        if self._poll_failures:
+            return "octo_poll_degraded"
         if self.is_connected:
             return None
         return self._runtime_error or "octo_disconnected"
+
+    @property
+    def runtime_status(self) -> dict[str, Any]:
+        """Credential-free diagnostics for hosts and operational tooling."""
+        return {
+            "websocket_connected": bool(self._ws and self._ws.connected),
+            "dispatch_running": bool(
+                self._dispatch_task and not self._dispatch_task.done()
+            ),
+            "gateway_handoff_wait_seconds": (
+                round(time.monotonic() - self._handoff_since, 1)
+                if self._awaiting_worker
+                else 0
+            ),
+            "poll_failures": self._poll_failures,
+            "poll_running": bool(self._poll_task and not self._poll_task.done()),
+            "last_poll_success": self._last_poll_success,
+            "notice_pending": self._notice_queue.qsize(),
+            "notice_dropped": self._notice_dropped,
+            "notice_failures": self._notice_failures,
+            "inbox": self._inbox.stats() if self._inbox else None,
+        }
+
+    def should_batch_inbound(self, message: InboundMessage) -> bool:
+        # Each durable key and sender must retain its own lifecycle and trust
+        # metadata. This also covers DMs and groups with history_limit=0.
+        return False
+
+    def get_debounce_key(self, message: InboundMessage) -> str:
+        # Gateway 1.0.3 calls this after dequeue, before acquiring the session
+        # lock. Releasing here keeps /stop deliverable while another message
+        # is waiting for that lock. Lifecycle 'started' still waits for prepare.
+        key = str(message.metadata.get("inbox_key") or "")
+        if key == self._awaiting_worker:
+            self._awaiting_worker = None
+            self._dispatch_wakeup.set()
+        return super().get_debounce_key(message)
 
     # ── Lifecycle ───────────────────────────────────────────────────────────
 
@@ -373,9 +438,13 @@ class OctoChannel(BaseChannel):
         ).hexdigest()[:32]
         self._inbox = Inbox(state_dir / scope / "inbox.sqlite")
         self._poll_cursor = self._inbox.cursor()
-        self._dispatch_task = asyncio.create_task(self._dispatch_loop())
         self._robot_id = info.robot_id
         self._owner_uid = info.owner_uid
+        self._awaiting_worker = None
+        self._poll_failures = 0
+        self._dispatch_task = asyncio.create_task(self._dispatch_loop())
+        self._dispatch_task.add_done_callback(self._dispatch_finished)
+        self._notice_task = asyncio.create_task(self._notice_loop())
         self._connection_session = f"octo-{uuid.uuid4().hex[:12]}"
         logger.info(
             "OctoChannel registered as %s (owner=%s)",
@@ -408,15 +477,19 @@ class OctoChannel(BaseChannel):
             (self._heartbeat_task, "heartbeat"),
             (self._poll_task, "events-poll"),
             (self._dispatch_task, "dispatch"),
+            (self._notice_task, "notice"),
         ):
-            if task is not None and not task.done():
-                task.cancel()
+            if task is not None:
+                if not task.done():
+                    task.cancel()
                 try:
                     await task
                 except (asyncio.CancelledError, Exception):  # noqa: BLE001  # pylint: disable=broad-except
                     pass
         self._heartbeat_task = None
         self._poll_task = None
+        self._dispatch_task = None
+        self._notice_task = None
         for task in list(self._history_backfill_tasks):
             task.cancel()
         await asyncio.gather(*self._history_backfill_tasks, return_exceptions=True)
@@ -428,8 +501,17 @@ class OctoChannel(BaseChannel):
             self._inbox.close()
             self._inbox = None
         self._scheduled.clear()
+        self._awaiting_worker = None
+        while not self._notice_queue.empty():
+            self._notice_queue.get_nowait()
+            self._notice_queue.task_done()
         self._connection_session = None
         logger.info("OctoChannel stopped")
+
+    def _dispatch_finished(self, task: asyncio.Task) -> None:
+        if not task.cancelled() and task.exception() is not None:
+            self._runtime_error = "octo_dispatch_failed"
+            logger.error("Octo dispatch task failed; inspect state before restarting")
 
     # ── Inbound ─────────────────────────────────────────────────────────────
 
@@ -440,6 +522,7 @@ class OctoChannel(BaseChannel):
         if info.robot_id != self._robot_id:
             raise RuntimeError("Octo Bot identity changed; recreate channel explicitly")
         self._config.api_url.policy.validate(info.ws_url, websocket=True)
+        self._owner_uid = info.owner_uid
         return info.ws_url, info.robot_id, info.im_token
 
     def _on_ws_state_change(self, connected: bool) -> None:
@@ -461,11 +544,16 @@ class OctoChannel(BaseChannel):
         raw = dict(msg)
         raw["via"] = via
         self._inbox.accept(self._robot_id + ":" + message_id, raw)
+        self._dispatch_wakeup.set()
 
     async def _dispatch_loop(self) -> None:
         while True:
             assert self._inbox is not None
-            for key, raw in self._inbox.pending(limit=4096):
+            self._dispatch_wakeup.clear()
+            if time.monotonic() - self._last_capacity_check >= 60:
+                self._inbox.warn_capacity()
+                self._last_capacity_check = time.monotonic()
+            for key, raw in self._inbox.pending(limit=32):
                 if key in self._scheduled:
                     continue
                 try:
@@ -478,20 +566,57 @@ class OctoChannel(BaseChannel):
                     self._inbox.mark(key, "ignored")
                     continue
                 if not self._enqueue_callback:
-                    continue
+                    break
                 native["inbox_key"] = key
                 notice = self._owner_command_notice(native)
                 if notice is not None:
                     self._inbox.mark(key, "ignored")
-                    await self._send_notice(native, notice)
+                    if (
+                        not native["is_group"]
+                        or not self._config.require_mention
+                        or native["bot_mentioned"]
+                    ):
+                        try:
+                            self._notice_queue.put_nowait((native, notice))
+                        except asyncio.QueueFull:
+                            self._notice_dropped += 1
+                            logger.warning(
+                                "Octo notice queue full; command still blocked"
+                            )
+                    self._dispatch_wakeup.set()
+                    continue
+                if self._awaiting_worker is not None:
+                    break
+                try:
+                    # Parse here so malformed timestamps/media cannot strand a
+                    # handoff before the gateway reaches _prepare_inbound().
+                    message = self.parse_inbound(native)
+                except Exception:
+                    self._inbox.mark(key, "invalid")
+                    logger.warning("Octo invalid inbound message; quarantined")
+                    self._dispatch_wakeup.set()
                     continue
                 self._scheduled.add(key)
+                self._awaiting_worker = key
+                self._handoff_since = time.monotonic()
                 try:
-                    self.enqueue(native)
+                    # New gateways return a boolean receipt. Legacy gateways
+                    # return None: allow only one not-yet-dequeued handoff, so this
+                    # producer cannot fill their per-channel queue. Never
+                    # blindly retry an ambiguous handoff after a timeout.
+                    accepted = self._enqueue_callback(message)
+                    if accepted is False:
+                        self._scheduled.discard(key)
+                        self._awaiting_worker = None
                 except Exception:
                     self._scheduled.discard(key)
+                    self._awaiting_worker = None
                     logger.warning("Octo enqueue failed; message remains received")
-            await asyncio.sleep(0.1)
+                break
+            try:
+                await asyncio.wait_for(self._dispatch_wakeup.wait(), timeout=1.0)
+            except TimeoutError:
+                pass
 
     def _native_message(self, msg: dict[str, Any]) -> dict[str, Any] | None:
         payload = msg.get("payload") or {}
@@ -528,7 +653,17 @@ class OctoChannel(BaseChannel):
         }
 
     async def _prepare_inbound(self, raw_payload: Any) -> Any:
-        key = raw_payload.get("inbox_key", "") if isinstance(raw_payload, dict) else ""
+        metadata = (
+            raw_payload.metadata
+            if isinstance(raw_payload, InboundMessage)
+            else raw_payload
+            if isinstance(raw_payload, dict)
+            else {}
+        )
+        key = str(metadata.get("inbox_key") or "")
+        if key == self._awaiting_worker:
+            self._awaiting_worker = None
+            self._dispatch_wakeup.set()
         if key and self._inbox:
             self._inbox.mark(key, "started")
         try:
@@ -558,6 +693,7 @@ class OctoChannel(BaseChannel):
             raise
         finally:
             self._scheduled.discard(key)
+            self._dispatch_wakeup.set()
 
     async def _preprocess_inbound(self, message: InboundMessage) -> None:
         if message.metadata.get("chat_type") == "group":
@@ -685,17 +821,36 @@ class OctoChannel(BaseChannel):
                     self._poll_cursor,
                     50,
                 )
-                for event in events:
-                    await self._handle_polled_event(event)
+                # Persist the batch before acknowledging it; event IDs define
+                # the cursor order even if a server returns an unsorted page.
+                ordered = sorted(
+                    (event for event in events if isinstance(event, dict)),
+                    key=lambda event: (
+                        event.get("event_id", 0)
+                        if type(event.get("event_id")) is int
+                        else 0
+                    ),
+                )
+                for event in ordered:
+                    await self._handle_polled_event(event, retry_acks=False)
+                await self._retry_acks()
+                self._last_poll_success = time.time()
+                self._poll_failures = 0
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001  # pylint: disable=broad-except
-                logger.debug("octo events poll failed", exc_info=True)
-                await asyncio.sleep(interval)
+                self._poll_failures += 1
+                logger.warning("Octo events poll failed (%d)", self._poll_failures)
+                await asyncio.sleep(
+                    min(300, interval * 2 ** min(self._poll_failures, 6))
+                )
                 continue
-            await asyncio.sleep(interval)
+            # A full page implies backlog. Yield without the idle poll delay.
+            await asyncio.sleep(0 if len(events) >= 50 else interval)
 
-    async def _handle_polled_event(self, event: dict[str, Any]) -> None:
+    async def _handle_polled_event(
+        self, event: dict[str, Any], *, retry_acks: bool = True
+    ) -> None:
         assert self._inbox is not None
         event_id = event.get("event_id")
         if (
@@ -717,22 +872,34 @@ class OctoChannel(BaseChannel):
                 "Octo unsupported event: id=%d kind=%s", event_id, kind[:100]
             )
         self._poll_cursor = self._inbox.cursor()
-        await self._retry_acks()
+        if retry_acks:
+            await self._retry_acks()
 
     async def _retry_acks(self) -> None:
         assert self._inbox is not None
-        for event_id in self._inbox.pending_acks():
-            try:
-                await asyncio.to_thread(
-                    octo_api.ack_event,
-                    self._config.api_url,
-                    self._config.bot_token,
-                    event_id,
-                )
-            except Exception:
-                logger.warning("Octo ACK pending: event=%d", event_id)
-                break
-            self._inbox.acked(event_id)
+        pending = iter(self._inbox.pending_acks())
+        failed = False
+
+        async def worker() -> None:
+            nonlocal failed
+            while not failed:
+                event_id = next(pending, None)
+                if event_id is None:
+                    return
+                try:
+                    await asyncio.to_thread(
+                        octo_api.ack_event,
+                        self._config.api_url,
+                        self._config.bot_token,
+                        event_id,
+                    )
+                except Exception:
+                    failed = True
+                    logger.warning("Octo ACK pending: event=%d", event_id)
+                    return
+                self._inbox.acked(event_id)
+
+        await asyncio.gather(*(worker() for _ in range(4)))
 
     # ── Outbound ────────────────────────────────────────────────────────────
 
@@ -763,22 +930,33 @@ class OctoChannel(BaseChannel):
                 chunk,
             )
 
+    async def _notice_loop(self) -> None:
+        while True:
+            native, text = await self._notice_queue.get()
+            try:
+                await self._send_notice(native, text)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._notice_failures += 1
+                logger.warning("Octo notice delivery failed")
+            finally:
+                self._notice_queue.task_done()
+
     async def _send_notice(self, native: dict[str, Any], text: str) -> None:
         """Deliver a channel-level notice without starting an agent turn."""
-        channel_id = str(native.get("channel_id") or "")
+        subject = self.parse_inbound(native).channel_subject
+        channel_id, channel_type = self._target_of(subject)
         if not channel_id:
             return
-        try:
-            await asyncio.to_thread(
-                octo_api.send_text,
-                self._config.api_url,
-                self._config.bot_token,
-                channel_id,
-                int(native.get("channel_type") or octo_api.CHANNEL_DM),
-                text,
-            )
-        except Exception:
-            logger.warning("Octo notice delivery failed", exc_info=True)
+        await asyncio.to_thread(
+            octo_api.send_text,
+            self._config.api_url,
+            self._config.bot_token,
+            channel_id,
+            channel_type,
+            text,
+        )
 
     async def _send_content(
         self, subject: ChannelSubject, parts: list[ContentPart]

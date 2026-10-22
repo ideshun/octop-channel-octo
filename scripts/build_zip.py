@@ -17,6 +17,10 @@ FILES = (
     "pyproject.toml",
     "docs/PROVENANCE.md",
     "docs/UX_PARITY.md",
+    "scripts/state_admin.py",
+    "compat/gateway-enqueue-receipts.patch",
+    "compat/octop-runtime-diagnostics.patch",
+    "compat/README.md",
     "octo_channel_impl/__init__.py",
     "octo_channel_impl/api.py",
     "octo_channel_impl/channel.py",
@@ -27,7 +31,7 @@ FILES = (
 
 
 def build(output: Path | None = None) -> Path:
-    output = output or ROOT / "dist/octop-channel-octo-0.1.2.zip"
+    output = output or ROOT / "dist/octop-channel-octo-0.1.3.zip"
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in FILES:

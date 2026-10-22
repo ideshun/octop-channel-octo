@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+- Keep durable lifecycle transitions for real gateway messages; quarantine interrupted turns and finalize passive group chatter.
+- Disable message batching, preserve sender trust per turn, and bound gateway handoff with optional explicit enqueue receipts.
+- Separate group activation from history retention; reserve commands for the owner without replying to unmentioned group commands.
+- Deliver bounded, independent permission notices with correct DM/group/topic routing.
+- Reuse DNS-pinned HTTP connections, enforce request deadlines and Retry-After, and avoid retrying invalid successful responses.
+- Catch up full event pages immediately; sort cursor updates, batch ACK retries with bounded concurrency, and expose component health.
+- Add private status, safe archive, retained dedup tombstones, and explicitly confirmed uncertain-work recovery tooling.
+- Include optional host compatibility patches, real gateway regressions, Linux/macOS CI and packaged-host smoke tests.
+- Document the host-enforced tool permission boundary for non-owner chat.
+
 ## 0.1.2
 
 - Publish a regular release containing the changes made after the v0.1.1 preview archive.

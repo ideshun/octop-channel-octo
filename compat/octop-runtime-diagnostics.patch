@@ -1,0 +1,20 @@
+--- a/octop/infra/gateway/gateway.py
++++ b/octop/infra/gateway/gateway.py
+@@ -218,11 +218,16 @@
+             if status.detail:
+                 detail = self._format_probe_error(RuntimeError(status.detail), locale)
+                 error = f"{error}: {detail}"
+-        return {
++        result: dict[str, Any] = {
+             "connected": status.connected,
+             "error": error,
+             "updated_at": status.updated_at,
+         }
++        channel = self._channel_manager.get_channel(channel_id) if self._channel_manager else None
++        diagnostics = getattr(channel, "runtime_status", None)
++        if isinstance(diagnostics, dict):
++            result["diagnostics"] = diagnostics
++        return result
+ 
+     async def boot(self) -> None:
+         from octop.infra.gateway.process.channel_thinking import (

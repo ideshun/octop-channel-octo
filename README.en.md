@@ -54,7 +54,7 @@ Create a bot through BotFather on the corresponding Octo server and obtain its t
 
 - **Administrator UIDs:** comma- or whitespace-separated IDs. The bot owner is always an administrator.
 - **Reply to administrators only:** off by default. When enabled, only the owner and configured administrators may trigger replies in private and group chats.
-- **Commands are owner-only:** off by default. When enabled, only the bot owner may send `/` commands; everyone else (administrators included) keeps normal chat and public research, while command messages get a short notice and never run as a turn.
+- **Commands are owner-only:** off by default. Only the bot owner may send `/` commands; other members, including administrators, can still chat. Commands that meet group activation rules receive a short notice and never run as a turn. The host controls tool permissions for ordinary chat.
 - **Group allowlist:** empty allows all groups. Enter group or topic IDs; allowing a parent group also allows its topics.
 - **Reply only to group messages that mention the bot:** on by default. Ordinary group messages do not trigger replies but may be retained as context when enabled. Private chats are unaffected; administrator restrictions still apply.
 - **Group context messages:** defaults to 10, range 0–100; 0 disables context.
@@ -68,6 +68,12 @@ Create a bot through BotFather on the corresponding Octo server and obtain its t
 - **Exact hosts allowed for private networks/plaintext:** normally empty. For private or HTTP self-hosted services, enter trusted hosts separated by commas or whitespace, without schemes, ports, or wildcards. This also permits their resolved private and loopback addresses; only trust services you control.
 
 The plugin supplies field descriptions. The companion host fix displays them as question-mark tooltips and points the configuration-help link to [this repository](https://github.com/ideshun/octop-channel-octo). Stock b9 has limitations displaying plugin descriptions, help, and defaults; full presentation requires the host fix and a rebuild. The plugin never patches host source files. See [UI compatibility](docs/UX_PARITY.md).
+
+### Tool permissions
+
+Owner-only commands do not restrict file, terminal, or other tools invoked through ordinary chat. Each message exposes `sender_is_owner` and `sender_is_admin`, derived from the platform owner UID and administrator configuration. The host must enforce a tool allowlist or execution guard to limit non-owners to chat and public research. Administrator status does not grant owner permissions. The plugin delivers messages individually and disables batching across senders.
+
+Optional enqueue receipt and runtime diagnostics patches are described in [compat/README.md](compat/README.md). The plugin also works with the stock host using a bounded handoff. It reports ambiguous handoff stalls instead of blindly retrying. It never patches the running host automatically.
 
 ## Data storage
 
@@ -103,6 +109,8 @@ ruff check .
 ruff format --check .
 python scripts/build_zip.py
 ```
+
+The CI workflow pins the tested host versions, runs on Linux and macOS, exercises both stock and patched gateway interfaces, and validates ZIP loading with the real host. See [operations](docs/OPERATIONS.md) for private, read-only diagnostics and offline archive/recovery commands.
 
 The package builder uses an explicit source allowlist and excludes credentials, state, tests, and caches.
 

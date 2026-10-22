@@ -95,7 +95,7 @@ def test_complete_manifest_and_schema():
     manifest = yaml.safe_load((root / "plugin.yaml").read_text())
     assert manifest["icon"] == captured["icon"] == module.ICON_URL
     assert manifest["description"] == module.DESCRIPTION
-    assert manifest["version"] == "0.1.2"
+    assert manifest["version"] == "0.1.3"
     fields = {f["name"]: f for f in captured["fields"]}
     assert set(fields) == set(OctoConfig.__annotations__) - {"state_dir"}
     assert fields["require_mention"]["defaultValue"] is True

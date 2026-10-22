@@ -78,6 +78,7 @@ async def test_non_owner_command_is_answered_without_a_turn(tmp_path):
             },
         )
         task = asyncio.create_task(obj._dispatch_loop())
+        notices_task = asyncio.create_task(obj._notice_loop())
         try:
             for _ in range(100):
                 await asyncio.sleep(0.02)
@@ -85,6 +86,8 @@ async def test_non_owner_command_is_answered_without_a_turn(tmp_path):
                     break
         finally:
             task.cancel()
+            notices_task.cancel()
+            await asyncio.gather(task, notices_task, return_exceptions=True)
         assert enqueued == []
         assert notices == [("dm", _OWNER_COMMAND_NOTICE)]
     finally:

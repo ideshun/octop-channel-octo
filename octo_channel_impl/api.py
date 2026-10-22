@@ -12,8 +12,11 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import http.client
 import time
 import uuid
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 from .network import open_url, policy_for
 from dataclasses import dataclass
@@ -87,10 +90,15 @@ def octo_request(
         else None
     )
     last_error: Exception | None = None
+    deadline = time.monotonic() + timeout
     for attempt in range(max(1, retries + 1)):
         import urllib.error
         import urllib.request
 
+        delay = 1.5 * (attempt + 1)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Octo request deadline expired") from last_error
         try:
             with open_url(
                 url,
@@ -98,7 +106,7 @@ def octo_request(
                 data=body,
                 headers=headers,
                 method=method,
-                timeout=timeout,
+                timeout=remaining,
             ) as resp:
                 raw = resp.read(8 * 1024 * 1024 + 1)
                 if len(raw) > 8 * 1024 * 1024:
@@ -112,14 +120,35 @@ def octo_request(
                 exc.read(4096)  # discard server body; may contain secrets
             except Exception:  # pylint: disable=broad-except
                 pass
+            finally:
+                exc.close()
             # 4xx (except 408/429) are deterministic — do not retry.
             if exc.code < 500 and exc.code not in (408, 429):
                 raise OctoApiError(exc.code, path, detail) from exc
             last_error = OctoApiError(exc.code, path, detail)
-        except Exception as exc:  # pylint: disable=broad-except
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            if retry_after:
+                try:
+                    delay = max(delay, float(retry_after))
+                except ValueError:
+                    try:
+                        delay = max(
+                            delay,
+                            (
+                                parsedate_to_datetime(retry_after)
+                                - datetime.now(timezone.utc)
+                            ).total_seconds(),
+                        )
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+        except (OSError, http.client.HTTPException) as exc:
             last_error = exc
         if attempt < retries:
-            time.sleep(1.5 * (attempt + 1))
+            if delay >= deadline - time.monotonic():
+                raise TimeoutError(
+                    "Octo retry exceeds request deadline"
+                ) from last_error
+            time.sleep(delay)
     raise last_error if last_error else OctoApiError(0, path, "unknown error")
 
 
@@ -227,10 +256,9 @@ def fetch_events(
             timeout=15.0,
             retries=1,
         )
-    except OctoApiError as exc:
-        if 400 <= exc.status < 500 and exc.status not in (408, 429):
-            logger.warning("octo events poll rejected (%s), resetting cursor", exc)
-            return []
+    except OctoApiError:
+        # Surface rejected credentials/cursors to channel health; returning an
+        # empty page here would incorrectly report a healthy fallback feed.
         raise
     if isinstance(data, dict) and isinstance(data.get("results"), list):
         return data["results"]
@@ -374,6 +402,7 @@ def upload_file(
         ):
             pass
     except urllib.error.HTTPError as exc:
+        exc.close()
         raise OctoApiError(exc.code, "uploadUrl", "presigned PUT rejected") from exc
     return download_url
 

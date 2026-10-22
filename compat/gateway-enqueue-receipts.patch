@@ -1,0 +1,60 @@
+--- a/octop_gateway/manager.py
++++ b/octop_gateway/manager.py
+@@ -246,7 +246,7 @@
+     # Enqueue
+     # =========================================================================
+ 
+-    def enqueue(self, channel_id: str, payload: Any) -> None:
++    def enqueue(self, channel_id: str, payload: Any) -> bool | None:
+         """Enqueue a raw payload for processing by the channel's workers.
+ 
+         Thread-safe: uses call_soon_threadsafe so it can be called from
+@@ -255,20 +255,28 @@
+         queue = self._queues.get(channel_id)
+         if queue is None:
+             logger.warning("No queue for channel %s, dropping payload", channel_id)
+-            return
++            return False
+ 
+         # Use stored loop for thread-safe enqueue
+         loop = self._loop
++        try:
++            current_loop = asyncio.get_running_loop()
++        except RuntimeError:
++            current_loop = None
++        if loop is not None and current_loop is loop:
++            return self._put_to_queue(queue, channel_id, payload)
+         if loop is not None and loop.is_running():
+             loop.call_soon_threadsafe(self._put_to_queue, queue, channel_id, payload)
+         else:
+             # Fallback: direct put (same thread)
+             try:
+                 queue.put_nowait(payload)
++                return True
+             except asyncio.QueueFull:
+                 logger.error("Queue full for channel %s, dropping payload", channel_id)
+-
+-    def _put_to_queue(self, queue: asyncio.Queue, channel_id: str, payload: Any) -> None:  # type: ignore[type-arg]
++                return False
++
++    def _put_to_queue(self, queue: asyncio.Queue, channel_id: str, payload: Any) -> bool:  # type: ignore[type-arg]
+         """Thread-safe helper: put payload into queue from the event loop thread."""
+         queued_payload = payload
+         channel = self._channels.get(channel_id)
+@@ -285,13 +293,15 @@
+                 )
+                 self._interrupt_tasks.add(task)
+                 task.add_done_callback(self._interrupt_tasks.discard)
+-                return
++                return True
+             if message is not None:
+                 queued_payload = message
+         try:
+             queue.put_nowait(queued_payload)
++            return True
+         except asyncio.QueueFull:
+             logger.error("Queue full for channel %s, dropping payload", channel_id)
++            return False
+ 
+     async def _run_interrupt(
+         self,

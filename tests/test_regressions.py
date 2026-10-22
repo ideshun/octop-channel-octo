@@ -10,9 +10,11 @@ def test_invalid_history_is_rejected(value):
         OctoConfig(history_limit=value)
 
 
-def test_history_zero_disables_explicit_context():
+def test_history_zero_keeps_activation_but_disables_history():
     cfg = OctoConfig(history_limit=0, group_context={"enabled": True})
-    assert cfg.group_context.enabled is False
+    assert cfg.group_context.enabled is True
+    assert cfg.group_context.history == "none"
+    assert cfg.group_context.history_limit == 0
 
 
 def bare():
