@@ -52,6 +52,13 @@ def setup(ctx):
                 "helpKey": "开启后仅 Bot 所有者和管理员 UID 列表中的用户可触发回复，对私聊和群聊均生效。",
             },
             {
+                "name": "owner_commands_only",
+                "label": "仅所有者可使用命令",
+                "type": "switch",
+                "defaultValue": False,
+                "helpKey": "开启后只有 Bot 所有者能发送 / 命令和调整对话模式；其他成员仍可正常聊天和查询公开资料，命令消息会收到简短提示而不会执行。管理员不豁免。",
+            },
+            {
                 "name": "group_whitelist",
                 "label": "群聊白名单",
                 "placeholder": "group1, group2",
