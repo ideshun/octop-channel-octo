@@ -38,6 +38,10 @@ from .network import PolicyURL, URLPolicy
 logger = logging.getLogger(__name__)
 
 _MAX_TEXT_LENGTH = 8000  # conservative split size per sendMessage
+# Shown when ``owner_commands_only`` blocks a non-owner command message.
+_OWNER_COMMAND_NOTICE = (
+    "仅机器人所有者可以使用命令和调整对话模式；其他成员可直接聊天或询问公开资料。"
+)
 _MEDIA_TYPES = {
     octo_api.PAYLOAD_IMAGE: "image",
     octo_api.PAYLOAD_GIF: "image",
@@ -100,6 +104,10 @@ class OctoConfig(ChannelConfig):
             comma separated in the UI). The bot owner is always an admin.
         owner_only: Only start turns from admins (owner + ``admins``);
             applies to DMs and group mentions alike.
+        owner_commands_only: Only the bot owner may use ``/`` commands and
+            control messages. Other senders still get normal chat turns but
+            command-looking messages are answered with a short notice and
+            never reach the host dispatcher.
         group_whitelist: Allowed group numbers (empty = all groups). Threads
             match by their parent group number.
         history_limit: Group context size — recent non-mention messages
@@ -115,6 +123,7 @@ class OctoConfig(ChannelConfig):
     show_typing: bool = True
     admins: str = ""
     owner_only: bool = False
+    owner_commands_only: bool = False
     group_whitelist: str = ""
     history_limit: int = 10
     state_dir: str = ""
@@ -143,6 +152,7 @@ class OctoConfig(ChannelConfig):
             "require_mention",
             "ignore_mention_all",
             "owner_only",
+            "owner_commands_only",
             "show_typing",
         ):
             raw = getattr(self, name)
@@ -313,6 +323,25 @@ class OctoChannel(BaseChannel):
             return False
         return True
 
+    def _owner_command_notice(self, native: dict[str, Any]) -> str | None:
+        """Notice text when a non-owner sends a command/control message.
+
+        ``owner_commands_only`` keeps chat working for everyone but reserves
+        ``/`` commands to the bot owner. Admins are deliberately not exempt:
+        the switch is about who may change the bot's conversation behaviour,
+        not about who may talk to it.
+        """
+        if not self._config.owner_commands_only:
+            return None
+        text = str(native.get("text") or "").strip()
+        if not text.startswith("/"):
+            return None
+        from_uid = str(native.get("from_uid") or "")
+        if self._owner_uid and from_uid == self._owner_uid:
+            return None
+        logger.debug("octo gate: blocked command from non-owner %s", from_uid)
+        return _OWNER_COMMAND_NOTICE
+
     # ── Connectivity state (read by Gateway runtime status) ─────────────────
 
     @property
@@ -451,6 +480,11 @@ class OctoChannel(BaseChannel):
                 if not self._enqueue_callback:
                     continue
                 native["inbox_key"] = key
+                notice = self._owner_command_notice(native)
+                if notice is not None:
+                    self._inbox.mark(key, "ignored")
+                    await self._send_notice(native, notice)
+                    continue
                 self._scheduled.add(key)
                 try:
                     self.enqueue(native)
@@ -728,6 +762,23 @@ class OctoChannel(BaseChannel):
                 channel_type,
                 chunk,
             )
+
+    async def _send_notice(self, native: dict[str, Any], text: str) -> None:
+        """Deliver a channel-level notice without starting an agent turn."""
+        channel_id = str(native.get("channel_id") or "")
+        if not channel_id:
+            return
+        try:
+            await asyncio.to_thread(
+                octo_api.send_text,
+                self._config.api_url,
+                self._config.bot_token,
+                channel_id,
+                int(native.get("channel_type") or octo_api.CHANNEL_DM),
+                text,
+            )
+        except Exception:
+            logger.warning("Octo notice delivery failed", exc_info=True)
 
     async def _send_content(
         self, subject: ChannelSubject, parts: list[ContentPart]

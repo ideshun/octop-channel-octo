@@ -54,6 +54,7 @@ Create a bot through BotFather on the corresponding Octo server and obtain its t
 
 - **Administrator UIDs:** comma- or whitespace-separated IDs. The bot owner is always an administrator.
 - **Reply to administrators only:** off by default. When enabled, only the owner and configured administrators may trigger replies in private and group chats.
+- **Commands are owner-only:** off by default. When enabled, only the bot owner may send `/` commands; everyone else (administrators included) keeps normal chat and public research, while command messages get a short notice and never run as a turn.
 - **Group allowlist:** empty allows all groups. Enter group or topic IDs; allowing a parent group also allows its topics.
 - **Reply only to group messages that mention the bot:** on by default. Ordinary group messages do not trigger replies but may be retained as context when enabled. Private chats are unaffected; administrator restrictions still apply.
 - **Group context messages:** defaults to 10, range 0–100; 0 disables context.
