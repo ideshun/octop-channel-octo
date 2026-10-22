@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3
+## 1.0.3
 
 - Keep durable lifecycle transitions for real gateway messages; quarantine interrupted turns and finalize passive group chatter.
 - Disable message batching, preserve sender trust per turn, and bound gateway handoff with optional explicit enqueue receipts.

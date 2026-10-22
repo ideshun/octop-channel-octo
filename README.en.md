@@ -12,6 +12,8 @@ Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.
 
 ## Installation
 
+Stable release: [v1.0.3 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.3) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.3/octop-channel-octo-1.0.3.zip).
+
 The Octop web administration interface is recommended. Choose one method.
 
 ### Install from a URL

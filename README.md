@@ -12,6 +12,8 @@ Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0
 
 ## 安装
 
+正式版：[v1.0.3 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.3) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.3/octop-channel-octo-1.0.3.zip)。
+
 推荐通过 Octop Web 管理界面安装，任选一种方式。
 
 ### 通过 URL 安装
