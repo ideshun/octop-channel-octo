@@ -137,7 +137,9 @@ async def test_passive_chatter_releases_capacity(tmp_path, monkeypatch):
     async with gateway(tmp_path) as (obj, _, seen):
         for index in range(4):
             obj._accept_message(raw(index, group=True), via="ws")
-            await wait_for(lambda: not obj._inbox.pending())
+            # received can be empty while the worker is still in started;
+            # capacity is released only after the ignored transition finishes.
+            await wait_for(lambda: obj._inbox.stats()["pending"] == 0)
         assert seen == []
         assert obj._inbox.stats()["pending"] == 0
         assert not obj._scheduled

@@ -34,7 +34,7 @@ jobs:
       - name: Install target host and test dependencies
         run: |
           python -m pip install --no-deps octop==1.0.2b9
-          python -m pip install -e '.[dev]' octop-gateway==1.0.3 octop-harness==1.0.4 'mcp<2'
+          python -m pip install -e '.[dev]' octop-gateway==1.0.3 octop-harness==1.0.4 'mcp<2' 'pydantic>=2.6,<2.14'
       - name: Apply optional host compatibility patches
         if: matrix.receipts
         run: |
