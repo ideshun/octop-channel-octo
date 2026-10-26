@@ -9,12 +9,37 @@ import os
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 logger = logging.getLogger(__name__)
 PENDING_LIMIT = 4096
 MESSAGE_LIMIT = 100000
 EVENT_LIMIT = 100000
+_WINDOWS = os.name == "nt"
+
+
+def _acquire_state_lock(path: Path) -> BinaryIO:
+    """Hold an exclusive, non-blocking OS lock for the handle's lifetime."""
+    handle = path.open("a+b")
+    try:
+        if _WINDOWS:
+            import msvcrt
+
+            # locking() starts at the current offset and permits locking past
+            # EOF. Always use byte zero, including existing non-empty lock files.
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        raise RuntimeError("Octo state already owned by another process") from None
+    except BaseException:
+        handle.close()
+        raise
+    return handle
 
 
 def database_stats(db: sqlite3.Connection, path: Path | None = None) -> dict[str, Any]:
@@ -69,33 +94,37 @@ class Inbox:
     def __init__(self, path: Path):
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        import fcntl
-
-        self._lock = path.with_suffix(".lock").open("a")
+        self._lock = _acquire_state_lock(path.with_suffix(".lock"))
         try:
-            fcntl.flock(self._lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            self._lock.close()
-            raise RuntimeError("Octo state already owned by another process") from None
-        self.db = sqlite3.connect(path)
-        path.chmod(0o600)
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.executescript("""
-            CREATE TABLE IF NOT EXISTS messages (
-                key TEXT PRIMARY KEY, raw TEXT NOT NULL, status TEXT NOT NULL,
-                updated REAL NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
-            CREATE INDEX IF NOT EXISTS message_status ON messages(status, updated);
-            CREATE INDEX IF NOT EXISTS event_status ON events(status, id);
-            CREATE TABLE IF NOT EXISTS message_tombstones (key TEXT PRIMARY KEY);
-        """)
-        # The previous process may have performed effects before it died.
-        self.db.execute("UPDATE messages SET status='uncertain' WHERE status='started'")
-        self.db.commit()
+            self.db = sqlite3.connect(path)
+            path.chmod(0o600)
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.executescript("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    key TEXT PRIMARY KEY, raw TEXT NOT NULL, status TEXT NOT NULL,
+                    updated REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+                CREATE INDEX IF NOT EXISTS message_status ON messages(status, updated);
+                CREATE INDEX IF NOT EXISTS event_status ON events(status, id);
+                CREATE TABLE IF NOT EXISTS message_tombstones (key TEXT PRIMARY KEY);
+            """)
+            # The previous process may have performed effects before it died.
+            self.db.execute(
+                "UPDATE messages SET status='uncertain' WHERE status='started'"
+            )
+            self.db.commit()
+        except BaseException:
+            try:
+                db = getattr(self, "db", None)
+                if db is not None:
+                    db.close()
+            finally:
+                self._lock.close()
+            raise
 
     def accept(self, key: str, raw: dict[str, Any]) -> bool:
         if self.db.execute(
@@ -254,5 +283,7 @@ class Inbox:
         return count
 
     def close(self):
-        self.db.close()
-        self._lock.close()
+        try:
+            self.db.close()
+        finally:
+            self._lock.close()

@@ -13,7 +13,7 @@ from test_delivery import channel
 def test_patched_host_serializes_plugin_diagnostics(tmp_path):
     spec = importlib.util.find_spec("octop")
     source = Path(spec.origin).parent / "infra/gateway/gateway.py"
-    tree = ast.parse(source.read_text())
+    tree = ast.parse(source.read_text(encoding="utf-8"))
     method = next(
         item
         for cls in tree.body

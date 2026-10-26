@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.4
+
+- Use non-blocking msvcrt state locks on Windows and retain flock on Linux/macOS, fixing channel-save probes failing with No module named fcntl.
+- Isolate Check Connection probes from online consumers: validate candidate credentials and connection metadata without opening state, starting another WebSocket, polling or ACKing events.
+- Preserve exclusive state ownership for real consumers; release handles after initialization failures, shutdown and process exit.
+- Use portable file URIs for state diagnostics and document Windows directory ACLs.
+- Add real-gateway regressions for online checks, repeated probes, candidate authentication failure and in-progress message preservation, plus a Windows CI job.
+
 ## 1.0.3
 
 - Keep durable lifecycle transitions for real gateway messages; quarantine interrupted turns and finalize passive group chatter.

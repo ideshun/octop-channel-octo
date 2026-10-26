@@ -6,13 +6,15 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
+**1.0.4** adds Windows state locking and fixes Check Connection competing with an online channel across platforms. The reported scenarios have passed user acceptance; see [testing instructions](docs/WINDOWS_TESTING.md).
+
 ## Requirements
 
 Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.0.4**, or compatible later versions. The host plugin manager installs dependencies declared in `plugin.yaml`.
 
 ## Installation
 
-Stable release: [v1.0.3 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.3) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.3/octop-channel-octo-1.0.3.zip).
+Stable release: [v1.0.4 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.4) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.4/octop-channel-octo-1.0.4.zip).
 
 The Octop web administration interface is recommended. Choose one method.
 
