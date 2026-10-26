@@ -6,6 +6,8 @@
 
 **支持 Linux 和 macOS，已实测可用。**
 
+Windows 文件锁兼容修复包含在本地测试版 **1.0.4rc1** 中，尚待 Windows 实机验收，见 [Windows 测试说明](docs/WINDOWS_TESTING.md)。下方正式版下载链接仍为已发布的 1.0.3。
+
 ## 环境要求
 
 Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0.4**，或兼容后续版本。插件依赖由宿主管理器按 `plugin.yaml` 安装。

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -64,7 +65,9 @@ def test_archive_retains_dedup_and_unresolved_work(tmp_path):
     result = admin(path, "archive", "--output", str(output))
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["archived_messages"] == 2
-    assert output.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        # Windows chmod cannot express POSIX 0600; directory ACLs apply there.
+        assert output.stat().st_mode & 0o777 == 0o600
     with sqlite3.connect(output) as backup:
         assert backup.execute("SELECT count(*) FROM messages").fetchone()[0] == 5
     inbox = Inbox(path)

@@ -12,6 +12,7 @@ from octo_channel_impl.api import BotRegisterInfo
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "user"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "user"))
     monkeypatch.setenv("OCTOP_HOME", str(tmp_path / "octop"))
 
 
@@ -95,7 +96,7 @@ def test_complete_manifest_and_schema():
     manifest = yaml.safe_load((root / "plugin.yaml").read_text())
     assert manifest["icon"] == captured["icon"] == module.ICON_URL
     assert manifest["description"] == module.DESCRIPTION
-    assert manifest["version"] == "1.0.3"
+    assert manifest["version"] == "1.0.4rc1"
     fields = {f["name"]: f for f in captured["fields"]}
     assert set(fields) == set(OctoConfig.__annotations__) - {"state_dir"}
     assert fields["require_mention"]["defaultValue"] is True

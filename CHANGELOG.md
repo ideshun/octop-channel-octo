@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4rc1 (local test build)
+
+- Fix Windows channel-save probes failing with `No module named 'fcntl'`: use non-blocking `msvcrt` byte-range locks on Windows, retaining `flock` on Linux/macOS.
+- Close lock and SQLite handles when state initialization fails; retain cross-process exclusion and release on shutdown/crash.
+- Use portable file URIs for state diagnostics and add save-probe, process-lock and Windows-adapter regressions.
+- Add a Windows CI configuration and native acceptance instructions. This build is not a published release; Windows acceptance is pending.
+
 ## 1.0.3
 
 - Keep durable lifecycle transitions for real gateway messages; quarantine interrupted turns and finalize passive group chatter.

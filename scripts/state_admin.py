@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 import sqlite3
 import sys
-from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -38,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         path = args.db.expanduser().resolve(strict=True)
         if args.command == "status":
             with closing(
-                sqlite3.connect(f"file:{quote(str(path))}?mode=ro", uri=True, timeout=2)
+                sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)
             ) as db:
                 print(json.dumps(database_stats(db, path), ensure_ascii=False))
             return 0

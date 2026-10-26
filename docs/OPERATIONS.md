@@ -6,7 +6,7 @@ WS 消息先写入 SQLite 再协议 ACK；REST 消息和事件先持久化再尝
 
 completed/ignored 清理消息正文但保留去重键。未归档消息记录达到 100,000 或待处理任务达到 4,096 时施加背压；未经服务端重放保留策略验证不会自动过期去重记录。80% 容量时记录预警。已 ACK 事件达到 10,000 条时压缩并保留独立高水位；待 ACK、不支持的事件和不确定任务继续保留，100,000 条未解决事件也会触发背压。SQLite 页面仍可能含删除后的字节，应保护整个卷和备份。
 
-本地 Linux/macOS 文件锁只防止同一状态数据库被同时使用，无法防止其他目录或机器消费同一 Bot。迁移必须停止旧消费者及其守护机制。
+状态库使用本地操作系统的非阻塞独占锁：Linux/macOS 使用 `fcntl.flock`，Windows 使用 `msvcrt.locking` 锁定 `.lock` 文件第一个字节。关闭文件或进程退出时由操作系统释放，不通过删除锁文件解除占用。该锁只防止同一状态数据库被同时使用，无法防止其他目录或机器消费同一 Bot。迁移必须停止旧消费者及其守护机制。
 
 公网地址要求 HTTPS/WSS 和公网 DNS 解析结果。HTTP/WS 固定已验证的 DNS 结果，禁用环境代理，并保留 TLS 主机名校验；allowed_hosts 对精确主机放行私网及明文。HTTP 重定向一律拒绝，包括预签名上传的重定向，请配置最终存储主机。上传 PUT 不携带 Bot Token；注册响应的 API 地址不替换配置的凭据目标。入站媒体仅在交给宿主前检查 URL 语法和 IP 字面量；宿主下载器仍负责 DNS、重定向及下载策略。内联 data URL 不会转发。
 
@@ -34,7 +34,7 @@ python scripts/state_admin.py --db /绝对路径/inbox.sqlite status
 
 ## 离线归档与恢复
 
-归档和重试要求先停止对应 Bot 的所有消费者，工具会取得独占锁。备份使用 SQLite backup API，包含 WAL 中的已提交内容，权限为 0600，拒绝覆盖已有文件。
+归档和重试要求先停止对应 Bot 的所有消费者，工具会取得独占锁。备份使用 SQLite backup API，包含 WAL 中的已提交内容，Unix 权限为 0600，拒绝覆盖已有文件。Windows 的访问权限继承目标目录 ACL；状态和备份应放在受限的用户/服务账户目录，POSIX 模式位不能代替 Windows ACL。
 
 ```sh
 python scripts/state_admin.py --db /绝对路径/inbox.sqlite archive --output /绝对路径/archive.sqlite

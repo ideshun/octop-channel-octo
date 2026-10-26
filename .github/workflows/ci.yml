@@ -6,6 +6,9 @@ permissions:
   contents: read
 jobs:
   test:
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -14,6 +17,9 @@ jobs:
             python: '3.12'
             receipts: false
           - os: macos-latest
+            python: '3.12'
+            receipts: false
+          - os: windows-latest
             python: '3.12'
             receipts: false
           - os: ubuntu-latest

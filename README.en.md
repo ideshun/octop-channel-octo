@@ -6,6 +6,8 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
+The local **1.0.4rc1** test build adds Windows state locking support. Native Windows acceptance testing is pending; see [Windows testing](docs/WINDOWS_TESTING.md). The stable download links below still refer to the published 1.0.3 release.
+
 ## Requirements
 
 Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.0.4**, or compatible later versions. The host plugin manager installs dependencies declared in `plugin.yaml`.
