@@ -6,7 +6,7 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
-The local **1.0.4rc1** test build adds Windows state locking support. Native Windows acceptance testing is pending; see [Windows testing](docs/WINDOWS_TESTING.md). The stable download links below still refer to the published 1.0.3 release.
+The local **1.0.4rc2** test build adds Windows state locking and fixes Check Connection competing with an online channel across platforms. Native Windows acceptance testing is pending; see [testing instructions](docs/WINDOWS_TESTING.md). The stable download links below still refer to the published 1.0.3 release.
 
 ## Requirements
 

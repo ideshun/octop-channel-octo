@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4rc2 (local test build)
+
+- Fix Check Connection competing with an already-online channel for its state database on Windows, macOS and Linux.
+- Use registration/credential validation for unregistered probe instances; do not open state, start another WebSocket, consume events or ACK messages during a check.
+- Preserve exclusive state ownership for real consumers and verify that candidate credential failures still surface.
+- Add real-gateway regressions for repeated checks using the live channel ID, draft checks, and preservation of an in-progress message.
+
 ## 1.0.4rc1 (local test build)
 
 - Fix Windows channel-save probes failing with `No module named 'fcntl'`: use non-blocking `msvcrt` byte-range locks on Windows, retaining `flock` on Linux/macOS.

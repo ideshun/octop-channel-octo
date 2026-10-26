@@ -426,13 +426,22 @@ class OctoChannel(BaseChannel):
             raise RuntimeError("OctoChannel: bot_token and api_url are required")
         self._stopping = False
 
-        state_dir = _state_directory(self._config.state_dir)
         info = await asyncio.to_thread(
             octo_api.register_bot, self._config.api_url, self._config.bot_token
         )
         if not info.ws_url or not info.im_token:
             raise RuntimeError("Octo registration requires ws_url and im_token")
         self._config.api_url.policy.validate(info.ws_url, websocket=True)
+        # Registered gateway consumers receive an enqueue callback before
+        # start(). Probe instances do not, including Check Connection probes
+        # that reuse an existing channel ID rather than "__probe__". Validate
+        # their supplied credentials without opening state, consuming events,
+        # or creating a competing WebSocket connection.
+        if self._enqueue_callback is None:
+            logger.info("Octo connection probe authenticated successfully")
+            return
+
+        state_dir = _state_directory(self._config.state_dir)
         scope = hashlib.sha256(
             (self._config.api_url.rstrip("/") + "|" + info.robot_id).encode()
         ).hexdigest()[:32]

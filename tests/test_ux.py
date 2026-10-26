@@ -50,6 +50,7 @@ async def test_auto_state_is_stable_across_token_rotation(tmp_path):
     paths = []
     for token in ("first-secret", "rotated-secret"):
         obj = OctoChannel(processor, config=OctoConfig(bot_token=token))
+        obj.set_enqueue_callback(lambda _: None)
         with (
             patch(
                 "octo_channel_impl.api.register_bot",
@@ -96,7 +97,7 @@ def test_complete_manifest_and_schema():
     manifest = yaml.safe_load((root / "plugin.yaml").read_text())
     assert manifest["icon"] == captured["icon"] == module.ICON_URL
     assert manifest["description"] == module.DESCRIPTION
-    assert manifest["version"] == "1.0.4rc1"
+    assert manifest["version"] == "1.0.4rc2"
     fields = {f["name"]: f for f in captured["fields"]}
     assert set(fields) == set(OctoConfig.__annotations__) - {"state_dir"}
     assert fields["require_mention"]["defaultValue"] is True
