@@ -94,7 +94,7 @@ def test_complete_manifest_and_schema():
         for key in list(sys.modules):
             if key == spec.name or key.startswith(spec.name + "."):
                 sys.modules.pop(key)
-    manifest = yaml.safe_load((root / "plugin.yaml").read_text())
+    manifest = yaml.safe_load((root / "plugin.yaml").read_text(encoding="utf-8"))
     assert manifest["icon"] == captured["icon"] == module.ICON_URL
     assert manifest["description"] == module.DESCRIPTION
     assert manifest["version"] == "1.0.4"
