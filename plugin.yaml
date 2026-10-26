@@ -1,5 +1,5 @@
 id: octop-channel-octo
-version: 1.0.4rc2
+version: 1.0.4
 name: Octo IM Channel
 kind: channel
 description: 配置 Octo IM 机器人频道，支持私聊与群聊，实时 WebSocket 接入，需在 Octo BotFather 创建机器人获取 Token。

@@ -6,7 +6,7 @@
 
 **支持 Linux 和 macOS，已实测可用。**
 
-本地测试版 **1.0.4rc2** 包含 Windows 文件锁兼容修复和跨平台在线“检查连接”冲突修复，尚待 Windows 实机验收，见[测试说明](docs/WINDOWS_TESTING.md)。下方正式版下载链接仍为已发布的 1.0.3。
+**1.0.4** 新增 Windows 状态锁支持，并修复跨平台在线“检查连接”冲突；相关场景已通过用户验证，见[测试说明](docs/WINDOWS_TESTING.md)。
 
 ## 环境要求
 
@@ -14,7 +14,7 @@ Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0
 
 ## 安装
 
-正式版：[v1.0.3 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.3) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.3/octop-channel-octo-1.0.3.zip)。
+正式版：[v1.0.4 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.4) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.4/octop-channel-octo-1.0.4.zip)。
 
 推荐通过 Octop Web 管理界面安装，任选一种方式。
 
