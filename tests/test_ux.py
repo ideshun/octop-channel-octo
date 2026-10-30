@@ -41,6 +41,30 @@ def test_state_rejects_files_and_dangling_links(tmp_path):
             OctoConfig(state_dir=str(path))
 
 
+def test_group_context_config_supports_gateway_without_owner_command_field(
+    monkeypatch,
+):
+    import octo_channel_impl.channel as channel_module
+
+    class LegacyGroupContextConfig:
+        def __init__(self, *, enabled, visibility, history, history_limit, activation):
+            self.enabled = enabled
+            self.visibility = visibility
+            self.history = history
+            self.history_limit = history_limit
+            self.activation = activation
+
+    current = channel_module.GroupContextConfig
+    monkeypatch.setattr(channel_module, "GroupContextConfig", LegacyGroupContextConfig)
+    config = channel_module.OctoConfig()
+    assert config.group_context.enabled
+    assert config.group_context.activation == "mention"
+
+    monkeypatch.setattr(channel_module, "GroupContextConfig", current)
+    if "owner_commands_only" in getattr(current, "__dataclass_fields__", {}):
+        assert channel_module.OctoConfig().group_context.owner_commands_only is False
+
+
 @pytest.mark.asyncio
 async def test_auto_state_is_stable_across_token_rotation(tmp_path):
     async def processor(message):

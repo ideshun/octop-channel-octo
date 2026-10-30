@@ -198,17 +198,21 @@ class OctoConfig(ChannelConfig):
             if parts.query:
                 raise ValueError("api_url must not contain a query")
         self.api_url = PolicyURL(self.api_url.rstrip("/"), policy)
-        self.group_context = GroupContextConfig(
+        group_context: dict[str, Any] = {
             # Activation remains active even when history is disabled. This
             # transport receives ordinary group traffic, not just mentions.
-            enabled=True,
-            visibility="all",
-            history="recent" if self.history_limit else "none",
-            history_limit=self.history_limit,
-            activation="mention" if self.require_mention else "always",
+            "enabled": True,
+            "visibility": "all",
+            "history": "recent" if self.history_limit else "none",
+            "history_limit": self.history_limit,
+            "activation": "mention" if self.require_mention else "always",
+        }
+        if "owner_commands_only" in getattr(
+            GroupContextConfig, "__dataclass_fields__", {}
+        ):
             # The adapter enforces its own owner command gate before enqueue.
-            owner_commands_only=False,
-        )
+            group_context["owner_commands_only"] = False
+        self.group_context = GroupContextConfig(**group_context)
 
 
 class OctoChannel(BaseChannel):
