@@ -198,15 +198,21 @@ class OctoConfig(ChannelConfig):
             if parts.query:
                 raise ValueError("api_url must not contain a query")
         self.api_url = PolicyURL(self.api_url.rstrip("/"), policy)
-        self.group_context = GroupContextConfig(
+        group_context: dict[str, Any] = {
             # Activation remains active even when history is disabled. This
             # transport receives ordinary group traffic, not just mentions.
-            enabled=True,
-            visibility="all",
-            history="recent" if self.history_limit else "none",
-            history_limit=self.history_limit,
-            activation="mention" if self.require_mention else "always",
-        )
+            "enabled": True,
+            "visibility": "all",
+            "history": "recent" if self.history_limit else "none",
+            "history_limit": self.history_limit,
+            "activation": "mention" if self.require_mention else "always",
+        }
+        if "owner_commands_only" in getattr(
+            GroupContextConfig, "__dataclass_fields__", {}
+        ):
+            # The adapter enforces its own owner command gate before enqueue.
+            group_context["owner_commands_only"] = False
+        self.group_context = GroupContextConfig(**group_context)
 
 
 class OctoChannel(BaseChannel):
@@ -264,6 +270,7 @@ class OctoChannel(BaseChannel):
         self._recent_ws_messages: dict[str, float] = {}
         # In-flight REST history backfills, so stop() can await/cancel them.
         self._history_backfill_tasks: set[asyncio.Task[None]] = set()
+        self._active_inputs: dict[str, tuple[InboundMessage, asyncio.Task[bool]]] = {}
 
     # ── Group context configuration ─────────────────────────────────────────
 
@@ -419,6 +426,48 @@ class OctoChannel(BaseChannel):
             self._dispatch_wakeup.set()
         return super().get_debounce_key(message)
 
+    def on_inbound_claimed(self, message: InboundMessage) -> None:
+        """A policy has consumed passive input; do not replay it as a user turn."""
+        key = str(message.metadata.get("inbox_key") or "")
+        if key and self._inbox:
+            row = self._inbox.db.execute(
+                "SELECT status FROM messages WHERE key=?", (key,)
+            ).fetchone()
+            if row == ("received",):
+                self._inbox.mark(key, "ignored")
+            self._scheduled.discard(key)
+            self._dispatch_wakeup.set()
+
+    def is_inbound_retracted(self, message: InboundMessage | ChannelSubject) -> bool:
+        metadata = message.metadata or {}
+        message_id = str(metadata.get("message_id") or "")
+        inbox = getattr(self, "_inbox", None)
+        return bool(
+            message_id
+            and inbox
+            and inbox.is_retracted(
+                self._robot_id + ":" + message_id,
+                str(metadata.get("channel_id_native") or metadata.get("chat_id") or ""),
+                int(metadata.get("channel_type") or 0),
+            )
+        )
+
+    def _forget_context_message(self, chat: str, message_id: str) -> None:
+        buffer = self._gc_buffers().get(chat)
+        if buffer is not None:
+            self._gc_buffers()[chat] = deque(
+                (entry for entry in buffer if entry.message_id != message_id),
+                maxlen=buffer.maxlen,
+            )
+
+    async def resolve_sender_is_bot(self, message: InboundMessage) -> bool | None:
+        """Classify from the cached server member list; unknown is never human."""
+        group = str(message.metadata.get("chat_id") or "")
+        uid = str(message.metadata.get("sender_id") or "")
+        await asyncio.to_thread(self._lookup_member_name, group, uid)
+        parent = group.split(octo_api.THREAD_ID_SEPARATOR)[0]
+        return getattr(self, "_member_bot_cache", {}).get(parent, {}).get(uid)
+
     # ── Lifecycle ───────────────────────────────────────────────────────────
 
     async def start(self) -> None:
@@ -550,6 +599,28 @@ class OctoChannel(BaseChannel):
         message_id = str(msg.get("message_id") or "")
         if not message_id:
             raise ValueError("message_id is required for durable deduplication")
+        payload = msg.get("payload") or {}
+        if isinstance(payload, str):
+            payload = json_loads(payload)
+        if isinstance(payload, dict) and payload.get("type") in (99, "99"):
+            # Octo SendRevoke uses CMD=99, messageRevoke, param.message_id.
+            if payload.get("cmd") == "messageRevoke":
+                param = payload.get("param")
+                target = param.get("message_id") if isinstance(param, dict) else None
+                chat = str(msg.get("channel_id") or "")
+                kind = self._normalize_channel_type(
+                    int(msg.get("channel_type") or 0), chat
+                )
+                if type(target) in (str, int) and str(target).isdigit() and chat:
+                    key = self._robot_id + ":" + str(target)
+                    self._inbox.retract(key, chat, kind)
+                    active = getattr(self, "_active_inputs", {}).get(key)
+                    if active and self.is_inbound_retracted(active[0]):
+                        active[1].cancel()
+                    self._forget_context_message(chat, str(target))
+                    logger.info("Octo message retracted; pending reply suppressed")
+            # Typing, receipt, recall and other CMD notifications are never user turns.
+            return
         raw = dict(msg)
         raw["via"] = via
         self._inbox.accept(self._robot_id + ":" + message_id, raw)
@@ -628,6 +699,8 @@ class OctoChannel(BaseChannel):
                 pass
 
     def _native_message(self, msg: dict[str, Any]) -> dict[str, Any] | None:
+        if octo_api.message_is_removed(msg):
+            return None
         payload = msg.get("payload") or {}
         if isinstance(payload, str):
             payload = json_loads(payload)
@@ -638,6 +711,13 @@ class OctoChannel(BaseChannel):
         channel_type = self._normalize_channel_type(
             int(msg.get("channel_type") or 0), channel_id
         )
+        inbox = getattr(self, "_inbox", None)
+        if inbox and inbox.is_retracted(
+            self._robot_id + ":" + str(msg.get("message_id") or ""),
+            channel_id,
+            channel_type,
+        ):
+            return None
         is_group = channel_type in (octo_api.CHANNEL_GROUP, octo_api.CHANNEL_THREAD)
         if not from_uid or from_uid == self._robot_id:
             return None
@@ -673,6 +753,28 @@ class OctoChannel(BaseChannel):
         if key == self._awaiting_worker:
             self._awaiting_worker = None
             self._dispatch_wakeup.set()
+        if isinstance(raw_payload, InboundMessage) and self.is_inbound_retracted(
+            raw_payload
+        ):
+            if key and self._inbox:
+                self._inbox.mark(key, "ignored")
+            self._scheduled.discard(key)
+            return None
+        if isinstance(raw_payload, dict) and (
+            octo_api.message_is_removed(raw_payload)
+            or (
+                self._inbox
+                and self._inbox.is_retracted(
+                    self._robot_id + ":" + str(raw_payload.get("message_id") or ""),
+                    str(raw_payload.get("channel_id") or ""),
+                    int(raw_payload.get("channel_type") or 0),
+                )
+            )
+        ):
+            if key and self._inbox:
+                self._inbox.mark(key, "ignored")
+            self._scheduled.discard(key)
+            return None
         if key and self._inbox:
             self._inbox.mark(key, "started")
         try:
@@ -682,6 +784,12 @@ class OctoChannel(BaseChannel):
                 self._inbox.mark(key, "uncertain")
             self._scheduled.discard(key)
             raise
+        if prepared is not None and self.is_inbound_retracted(prepared[0]):
+            self._forget_context_message(
+                str(prepared[0].metadata.get("conversation_id") or ""),
+                str(prepared[0].metadata.get("message_id") or ""),
+            )
+            prepared = None
         if prepared is None and key and self._inbox:
             self._inbox.mark(key, "ignored")
             self._scheduled.discard(key)
@@ -691,16 +799,37 @@ class OctoChannel(BaseChannel):
         self, message: InboundMessage, subject: ChannelSubject
     ) -> bool:
         key = str(message.metadata.get("inbox_key") or "")
+        if self.is_inbound_retracted(message):
+            if key and self._inbox:
+                self._inbox.mark(key, "ignored")
+            self._scheduled.discard(key)
+            self._dispatch_wakeup.set()
+            return False
+        # Cancel a turn without cancelling the gateway worker that owns it.
+        task = asyncio.create_task(super()._process_inbound(message, subject))
+        self._active_inputs[key] = (message, task)
         try:
-            succeeded = await super()._process_inbound(message, subject)
+            succeeded = await task
             if key and self._inbox:
                 self._inbox.mark(key, "completed" if succeeded else "uncertain")
             return succeeded
+        except asyncio.CancelledError:
+            if (
+                self.is_inbound_retracted(message)
+                and not asyncio.current_task().cancelling()
+            ):
+                if key and self._inbox:
+                    self._inbox.mark(key, "ignored")
+                return False
+            if key and self._inbox:
+                self._inbox.mark(key, "uncertain")
+            raise
         except BaseException:
             if key and self._inbox:
                 self._inbox.mark(key, "uncertain")
             raise
         finally:
+            self._active_inputs.pop(key, None)
             self._scheduled.discard(key)
             self._dispatch_wakeup.set()
 
@@ -930,6 +1059,8 @@ class OctoChannel(BaseChannel):
         channel_id, channel_type = self._target_of(subject)
         text = self._prepare_group_text(subject, text)
         for chunk in _split_text(text, _MAX_TEXT_LENGTH):
+            if self.is_inbound_retracted(subject):
+                return
             await asyncio.to_thread(
                 octo_api.send_text,
                 self._config.api_url,
@@ -958,6 +1089,8 @@ class OctoChannel(BaseChannel):
         channel_id, channel_type = self._target_of(subject)
         if not channel_id:
             return
+        if self.is_inbound_retracted(subject):
+            return
         await asyncio.to_thread(
             octo_api.send_text,
             self._config.api_url,
@@ -977,6 +1110,8 @@ class OctoChannel(BaseChannel):
                 await self._send_media(subject, part)
 
     async def _send_media(self, subject: ChannelSubject, media: ContentPart) -> None:
+        if self.is_inbound_retracted(subject):
+            return
         channel_id, channel_type = self._target_of(subject)
         label = self._get_media_label(media)
         url = self._get_media_url(media)
@@ -1032,6 +1167,8 @@ class OctoChannel(BaseChannel):
                 **({"size": media.size} if getattr(media, "size", None) else {}),
             }
         try:
+            if self.is_inbound_retracted(subject):
+                return
             await asyncio.to_thread(
                 octo_api.send_media_payload,
                 self._config.api_url,
@@ -1156,15 +1293,30 @@ class OctoChannel(BaseChannel):
                     path,
                     timeout=10.0,
                 )
+                if isinstance(data, dict):
+                    data = data.get("members", [])
+                members = data if isinstance(data, list) else []
                 cached = {
                     str(m.get("uid")): str(m.get("name") or "")
-                    for m in (data if isinstance(data, list) else [])
+                    for m in members
                     if isinstance(m, dict) and m.get("uid")
                 }
+                flags = {}
+                for member in members:
+                    if isinstance(member, dict) and member.get("uid"):
+                        flag = member.get("robot")
+                        if type(flag) in (bool, int) and flag in (0, 1):
+                            flags[str(member["uid"])] = bool(flag)
+                if not hasattr(self, "_member_bot_cache"):
+                    self._member_bot_cache = {}
+                self._member_bot_cache[parent] = flags
             except Exception:  # noqa: BLE001  # pylint: disable=broad-except
                 cached = {}
+                getattr(self, "_member_bot_cache", {}).pop(parent, None)
             if len(cache) >= 256:
-                cache.pop(next(iter(cache)))
+                oldest = next(iter(cache))
+                cache.pop(oldest)
+                getattr(self, "_member_bot_cache", {}).pop(oldest, None)
             cache[parent] = (time.monotonic(), cached)
         return cached.get(uid, "")
 
@@ -1211,9 +1363,8 @@ class OctoChannel(BaseChannel):
             return f"[名片: {name} ({uid})]" if uid else f"[名片: {name}]", media
         if ptype == octo_api.PAYLOAD_RICHTEXT:
             return self._resolve_richtext(payload, media)
-        # Structured cards (17) and unknown types: degrade to a placeholder so
-        # the turn still completes instead of dropping silently.
-        return "[收到不支持的消息类型]", media
+        # System notices, CMD and unsupported payloads must not start an agent.
+        return "", media
 
     def _resolve_richtext(
         self, payload: dict[str, Any], media: list[ContentPart]
@@ -1336,7 +1487,7 @@ class OctoChannel(BaseChannel):
                     "message_id": item.message_id,
                     "payload": {"type": 1, "content": item.text},
                 }
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) or octo_api.message_is_removed(item):
                 continue
             from_uid = str(item.get("from_uid") or "")
             if from_uid == self._robot_id:
@@ -1369,12 +1520,22 @@ class OctoChannel(BaseChannel):
         if not entries:
             return False
         buffers = self._gc_buffers()
+        inbox = getattr(self, "_inbox", None)
+        kind = self._normalize_channel_type(0, conversation_id)
         merged = {
             entry.message_id
             or f"{entry.sender_id}:{entry.timestamp}:{entry.text}": entry
             for entry in entries
+            if not inbox
+            or not inbox.is_retracted(
+                self._robot_id + ":" + entry.message_id, conversation_id, kind
+            )
         }
         for entry in buffers.get(conversation_id, ()):
+            if inbox and inbox.is_retracted(
+                self._robot_id + ":" + entry.message_id, conversation_id, kind
+            ):
+                continue
             merged[
                 entry.message_id or f"{entry.sender_id}:{entry.timestamp}:{entry.text}"
             ] = entry

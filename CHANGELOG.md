@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- 兼容尚未提供 `owner_commands_only` 字段的 Gateway 版本；保留新版本宿主上的原有设置。
+
+## 1.1.0 — 2026-10-31
+
+- 对接群聊参与策略的收件箱接管回调，跳过/延迟消息释放容量；通过已有成员缓存解析机器人身份，保留原有 @ 和命令权限处理。
+- 过滤撤回、输入状态和系统通知，持久记录撤回标记；丢弃待处理的撤回消息，取消尚在生成的回复并清理群上下文，不取消 Gateway worker。
+
+
 ## 1.0.4
 
 - Use non-blocking msvcrt state locks on Windows and retain flock on Linux/macOS, fixing channel-save probes failing with No module named fcntl.

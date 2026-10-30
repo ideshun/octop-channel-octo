@@ -276,6 +276,20 @@ class HistoryEntry:
     message_seq: int = 0
 
 
+def message_is_removed(item: dict[str, Any]) -> bool:
+    extra = item.get("message_extra")
+    extra = extra if isinstance(extra, dict) else {}
+    return any(
+        type(value) in (bool, int) and value == 1
+        for value in (
+            item.get("revoke"),
+            item.get("is_deleted"),
+            extra.get("revoke"),
+            extra.get("is_deleted"),
+        )
+    )
+
+
 def fetch_history(
     api_url: str,
     bot_token: str,
@@ -309,7 +323,7 @@ def fetch_history(
     entries: list[HistoryEntry] = []
     raw_messages = data.get("messages") if isinstance(data, dict) else None
     for item in raw_messages if isinstance(raw_messages, list) else []:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or message_is_removed(item):
             continue
         payload: Any = {}
         raw_payload = item.get("payload")
