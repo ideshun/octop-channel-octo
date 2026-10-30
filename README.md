@@ -6,7 +6,7 @@
 
 **支持 Linux 和 macOS，已实测可用。**
 
-**1.0.4** 新增 Windows 状态锁支持，并修复跨平台在线“检查连接”冲突；相关场景已通过用户验证，见[测试说明](docs/WINDOWS_TESTING.md)。
+**1.1.0** 支持配合 `octop-social-trigger` 选择性参与群聊普通消息，并拦截被撤回的输入及其待发回复。Windows 状态锁和在线通道检查修复见[测试说明](docs/WINDOWS_TESTING.md)。
 
 ## 环境要求
 
@@ -14,7 +14,7 @@ Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0
 
 ## 安装
 
-正式版：[v1.0.4 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.4) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.4/octop-channel-octo-1.0.4.zip)。
+正式版：[v1.1.0 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.0) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.0/octop-channel-octo-1.1.0.zip)。
 
 推荐通过 Octop Web 管理界面安装，任选一种方式。
 
@@ -73,6 +73,10 @@ octop plugin install /插件目录的绝对路径
 
 插件提供字段说明，配套宿主修复会在标签旁以“？”显示；“查看配置说明”指向[本仓库](https://github.com/ideshun/octop-channel-octo)。原版 b9 对插件描述、提示与默认值的展示存在限制，完整效果需要宿主修复及重新构建；插件不会修改宿主源码。见[界面兼容说明](docs/UX_PARITY.md)。
 
+### 群聊自动参与
+
+本通道已支持配合 [octop-social-trigger 群聊自动参与插件](https://github.com/ideshun/octop-social-trigger)，根据每个群和专家的设置选择性回复普通群消息；只需要 @ 触发时无需安装。需要此功能时，请按[插件安装说明](https://github.com/ideshun/octop-social-trigger/blob/develop/docs/install.md)另行安装 `octop-social-trigger`，并使用包含对应入站策略接口的 Octop 与 Gateway Fork。策略插件负责群范围、参与策略、频率限制和可选决策模型；本通道保留原有 @ 与命令权限。请保持“仅回复 @机器人的群消息”开启，由策略插件接管获准范围内的普通群消息；身份未知时不会自动参与。
+
 ### 工具权限边界
 
 “仅所有者可使用命令”只限制 `/` 命令，不会限制普通聊天调用本机文件、终端或其他工具。消息提供来自平台所有者 UID 和管理员配置的 `sender_is_owner` / `sender_is_admin`，宿主必须据此在工具执行端实施权限限制，才能实现“其他成员仅聊天和查询公开资料”。管理员标识不等于所有者权限。插件逐条交付消息，禁止混合发送者批处理。
@@ -100,6 +104,8 @@ octop plugin install --force /新版插件目录的绝对路径
 平台可用性已实测；具体服务的 WS／REST／媒体互通、重放保留策略、负载与迁移仍需按部署环境验收。离线测试不替代端到端验收。
 
 中断且结果不确定的任务标记为 `uncertain`，不自动重放；先核对外部副作用。`completed` 仅表示宿主处理路径返回，不保证外部操作恰好执行一次。
+
+开发版识别 Octo 的 `type=99 / cmd=messageRevoke / param.message_id`，撤回通知与系统事件不会启动专家；撤回标记跨重启保留，待处理输入和后续输出会拦截，正在生成的对应回复会取消。已发出的内容或已经交给网络发送的请求无法自动撤销。协议依据见 [Octo SendRevoke](https://github.com/Mininglamp-OSS/octo-lib/blob/main/config/msg.go)。
 
 暂不支持交互卡片、文档同步、Bot Tasks 和自动菜单。
 

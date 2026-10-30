@@ -111,6 +111,10 @@ class Inbox:
                 CREATE INDEX IF NOT EXISTS message_status ON messages(status, updated);
                 CREATE INDEX IF NOT EXISTS event_status ON events(status, id);
                 CREATE TABLE IF NOT EXISTS message_tombstones (key TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS message_retractions (
+                    key TEXT NOT NULL, channel_id TEXT NOT NULL, channel_type INTEGER NOT NULL,
+                    PRIMARY KEY (key, channel_id, channel_type)
+                );
             """)
             # The previous process may have performed effects before it died.
             self.db.execute(
@@ -161,6 +165,30 @@ class Inbox:
                 (limit,),
             )
         ]
+
+    def retract(self, key: str, channel_id: str, channel_type: int) -> None:
+        """Keep an idempotent, content-free marker even if recall arrives first."""
+        if self.is_retracted(key, channel_id, channel_type):
+            return
+        if (
+            self.db.execute("SELECT count(*) FROM message_retractions").fetchone()[0]
+            >= MESSAGE_LIMIT
+        ):
+            raise RuntimeError("Octo retraction store capacity reached")
+        with self.db:
+            self.db.execute(
+                "INSERT OR IGNORE INTO message_retractions VALUES (?, ?, ?)",
+                (key, channel_id, channel_type),
+            )
+
+    def is_retracted(self, key: str, channel_id: str, channel_type: int) -> bool:
+        return (
+            self.db.execute(
+                "SELECT 1 FROM message_retractions WHERE key=? AND channel_id=? AND channel_type=?",
+                (key, channel_id, channel_type),
+            ).fetchone()
+            is not None
+        )
 
     def mark(self, key: str, status: str):
         with self.db:

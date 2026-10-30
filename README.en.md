@@ -6,7 +6,7 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
-**1.0.4** adds Windows state locking and fixes Check Connection competing with an online channel across platforms. The reported scenarios have passed user acceptance; see [testing instructions](docs/WINDOWS_TESTING.md).
+**1.1.0** supports selective participation in ordinary group messages with `octop-social-trigger` and suppresses pending replies to retracted messages. Windows state locking and online channel check fixes are covered in the [testing instructions](docs/WINDOWS_TESTING.md).
 
 ## Requirements
 
@@ -14,7 +14,7 @@ Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.
 
 ## Installation
 
-Stable release: [v1.0.4 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.0.4) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.0.4/octop-channel-octo-1.0.4.zip).
+Stable release: [v1.1.0 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.0) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.0/octop-channel-octo-1.1.0.zip).
 
 The Octop web administration interface is recommended. Choose one method.
 
@@ -72,6 +72,10 @@ Create a bot through BotFather on the corresponding Octo server and obtain its t
 - **Exact hosts allowed for private networks/plaintext:** normally empty. For private or HTTP self-hosted services, enter trusted hosts separated by commas or whitespace, without schemes, ports, or wildcards. This also permits their resolved private and loopback addresses; only trust services you control.
 
 The plugin supplies field descriptions. The companion host fix displays them as question-mark tooltips and points the configuration-help link to [this repository](https://github.com/ideshun/octop-channel-octo). Stock b9 has limitations displaying plugin descriptions, help, and defaults; full presentation requires the host fix and a rebuild. The plugin never patches host source files. See [UI compatibility](docs/UX_PARITY.md).
+
+### Group participation
+
+This channel supports selective replies to ordinary group messages through the [octop-social-trigger plugin](https://github.com/ideshun/octop-social-trigger). Install that plugin separately if you need this feature; mention-triggered replies work without it. Follow the [installation guide](https://github.com/ideshun/octop-social-trigger/blob/develop/docs/install.md) and use matching Octop and Gateway Forks that include the inbound policy interfaces. The policy plugin manages group/expert scope, participation rules, reply limits, and the optional decision model. Keep **Reply only to group messages that mention the bot** enabled so the policy plugin can selectively claim allowed ordinary messages. Existing mention and command permissions remain enforced; unknown sender identities are not treated as human.
 
 ### Tool permissions
 
