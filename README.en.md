@@ -6,7 +6,7 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
-**1.1.0** supports selective participation in ordinary group messages with `octop-social-trigger` and suppresses pending replies to retracted messages. Windows state locking and online channel check fixes are covered in the [testing instructions](docs/WINDOWS_TESTING.md).
+**1.1.1** fixes replies triggered by bot messages, prefix collisions when matching @ mentions, and compatibility with older Gateway configuration. Install [`octop-social-trigger`](https://github.com/ideshun/octop-social-trigger) for selective group participation.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.
 
 ## Installation
 
-Stable release: [v1.1.0 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.0) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.0/octop-channel-octo-1.1.0.zip).
+Stable release: [v1.1.1 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.1) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.1/octop-channel-octo-1.1.1.zip).
 
 The Octop web administration interface is recommended. Choose one method.
 

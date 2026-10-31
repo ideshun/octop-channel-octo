@@ -130,9 +130,12 @@ def test_complete_manifest_and_schema():
             if key == spec.name or key.startswith(spec.name + "."):
                 sys.modules.pop(key)
     manifest = yaml.safe_load((root / "plugin.yaml").read_text(encoding="utf-8"))
+    import tomllib
+
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert manifest["icon"] == captured["icon"] == module.ICON_URL
     assert manifest["description"] == module.DESCRIPTION
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == project["project"]["version"]
     fields = {f["name"]: f for f in captured["fields"]}
     assert set(fields) == set(OctoConfig.__annotations__) - {"state_dir"}
     assert fields["require_mention"]["defaultValue"] is True
