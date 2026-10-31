@@ -36,6 +36,16 @@ def test_text_mention_survives_normalization(tmp_path):
     obj._inbox.close()
 
 
+def test_mention_of_another_user_does_not_match_bot_name_prefix(tmp_path):
+    obj = channel(tmp_path)
+    obj._robot_name = "助手"
+    assert not obj._mentioned("@助手甲 hello", {"mention": {"uids": ["other"]}})
+    assert not obj._mentioned("@助手甲 hello", {})
+    assert obj._mentioned("@助手 hello", {})
+    assert obj._mentioned("hello", {"mention": {"uids": ["bot"]}})
+    obj._inbox.close()
+
+
 @pytest.mark.parametrize("order", [("ws", "poll"), ("poll", "ws"), ("ws", "ws")])
 def test_cross_transport_dedup(tmp_path, order):
     obj = channel(tmp_path)

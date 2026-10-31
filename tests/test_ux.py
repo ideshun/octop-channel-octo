@@ -65,6 +65,17 @@ def test_group_context_config_supports_gateway_without_owner_command_field(
         assert channel_module.OctoConfig().group_context.owner_commands_only is False
 
 
+def test_saved_group_history_limit_and_plugin_switch_are_both_preserved():
+    config = OctoConfig.from_dict(
+        {"history_limit": "2", "group_context": {"social_trigger_enabled": True}}
+    )
+    assert config.history_limit == 2
+    assert config.group_context.history_limit == 2
+    plugin_settings = getattr(config, "plugin_group_settings", None)
+    if plugin_settings is not None:
+        assert plugin_settings["social_trigger_enabled"] is True
+
+
 @pytest.mark.asyncio
 async def test_auto_state_is_stable_across_token_rotation(tmp_path):
     async def processor(message):

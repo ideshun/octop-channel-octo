@@ -96,6 +96,32 @@ async def test_group_activation_is_independent_of_history(tmp_path, history, req
 
 
 @pytest.mark.asyncio
+async def test_group_bot_messages_do_not_trigger_mentions_or_command_notices(tmp_path):
+    async with gateway(tmp_path, require_mention=True, owner_commands_only=True) as (
+        obj,
+        _,
+        seen,
+    ):
+
+        async def classify(message):
+            return message.metadata["sender_id"] == "other-bot"
+
+        obj.resolve_sender_is_bot = AsyncMock(side_effect=classify)
+        obj._send_notice = AsyncMock()
+        obj._accept_message(raw(1, "@bot hello", uid="other-bot", group=True), via="ws")
+        obj._accept_message(
+            raw(2, "@bot /model x:y", uid="other-bot", group=True), via="ws"
+        )
+        await wait_for(lambda: obj._inbox.stats()["pending"] == 0)
+        assert seen == []
+        obj._send_notice.assert_not_awaited()
+
+        obj._accept_message(raw(3, "@bot hello", uid="peer", group=True), via="ws")
+        await wait_for(lambda: len(seen) == 1)
+        assert seen[0].metadata["sender_is_bot"] is False
+
+
+@pytest.mark.asyncio
 async def test_burst_does_not_merge_senders_drop_queue_items_or_replay(tmp_path):
     async with gateway(tmp_path, history_limit=0, require_mention=False) as (
         obj,
