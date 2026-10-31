@@ -6,7 +6,7 @@ Connect Octo private chats, groups, and community topics to Octop. Supports text
 
 **Supports Linux and macOS; both have been tested successfully.**
 
-**1.1.0** supports selective participation in ordinary group messages with `octop-social-trigger` and suppresses pending replies to retracted messages. Windows state locking and online channel check fixes are covered in the [testing instructions](docs/WINDOWS_TESTING.md).
+**1.1.1** fixes replies triggered by bot messages, prefix collisions when matching @ mentions, and compatibility with older Gateway configuration. Install [`octop-social-trigger`](https://github.com/ideshun/octop-social-trigger) for selective group participation.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ Python 3.12+; Octop **1.0.2b9**, octop-gateway **1.0.3**, and octop-harness **1.
 
 ## Installation
 
-Stable release: [v1.1.0 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.0) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.0/octop-channel-octo-1.1.0.zip).
+Stable release: [v1.1.1 notes](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.1) · [Download plugin ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.1/octop-channel-octo-1.1.1.zip).
 
 The Octop web administration interface is recommended. Choose one method.
 
@@ -61,7 +61,7 @@ Create a bot through BotFather on the corresponding Octo server and obtain its t
 - **Commands are owner-only:** off by default. Only the bot owner may send `/` commands; other members, including administrators, can still chat. Commands that meet group activation rules receive a short notice and never run as a turn. The host controls tool permissions for ordinary chat.
 - **Group allowlist:** empty allows all groups. Enter group or topic IDs; allowing a parent group also allows its topics.
 - **Reply only to group messages that mention the bot:** on by default. Ordinary group messages do not trigger replies but may be retained as context when enabled. Private chats are unaffected; administrator restrictions still apply.
-- **Group context messages:** defaults to 10, range 0–100; 0 disables context.
+- **Group context messages:** maximum recent group messages attached to each turn, default 10, range 0–100; 0 disables group context. Automatic participation also respects the policy plugin's message count and retention time. This does not clear the expert's existing conversation history.
 - **Ignore mention-all:** off by default. When enabled, mention-all does not trigger a reply.
 
 ### Connection

@@ -43,7 +43,9 @@ from octop_harness.plugins.loader import load_plugin_dir
 from octop_harness.plugins.registry import PluginRegistry
 from octop.infra.gateway.plugin_channels import apply_plugin_channels
 plugin = load_plugin_dir(Path(sys.argv[1]), install_deps=False)
-assert plugin.manifest.version == "1.1.0"
+import yaml
+manifest = yaml.safe_load((Path(sys.argv[1]) / "plugin.yaml").read_text(encoding="utf-8"))
+assert plugin.manifest.version == manifest["version"]
 assert any(info.kind == "octo" for info in apply_plugin_channels(registry=PluginRegistry()))
 assert (Path(sys.argv[1]) / "scripts/state_admin.py").is_file()
 """

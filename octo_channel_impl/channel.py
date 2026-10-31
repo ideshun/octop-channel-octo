@@ -648,6 +648,32 @@ class OctoChannel(BaseChannel):
                 if not self._enqueue_callback:
                     break
                 native["inbox_key"] = key
+                try:
+                    # Parse before any notice or handoff so group bot messages
+                    # cannot trigger either an agent turn or a command notice.
+                    message = self.parse_inbound(native)
+                except Exception:
+                    self._inbox.mark(key, "invalid")
+                    logger.warning("Octo invalid inbound message; quarantined")
+                    self._dispatch_wakeup.set()
+                    continue
+                if native["is_group"]:
+                    try:
+                        async with asyncio.timeout(3):
+                            sender_is_bot = await self.resolve_sender_is_bot(message)
+                    except Exception:
+                        sender_is_bot = None
+                    if sender_is_bot is True:
+                        self._inbox.mark(key, "ignored")
+                        self._dispatch_wakeup.set()
+                        logger.info("Octo group message from a bot ignored")
+                        continue
+                    if type(sender_is_bot) is bool:
+                        message.metadata["sender_is_bot"] = sender_is_bot
+                        if message.channel_subject:
+                            message.channel_subject.metadata["sender_is_bot"] = (
+                                sender_is_bot
+                            )
                 notice = self._owner_command_notice(native)
                 if notice is not None:
                     self._inbox.mark(key, "ignored")
@@ -667,15 +693,6 @@ class OctoChannel(BaseChannel):
                     continue
                 if self._awaiting_worker is not None:
                     break
-                try:
-                    # Parse here so malformed timestamps/media cannot strand a
-                    # handoff before the gateway reaches _prepare_inbound().
-                    message = self.parse_inbound(native)
-                except Exception:
-                    self._inbox.mark(key, "invalid")
-                    logger.warning("Octo invalid inbound message; quarantined")
-                    self._dispatch_wakeup.set()
-                    continue
                 self._scheduled.add(key)
                 self._awaiting_worker = key
                 self._handoff_since = time.monotonic()
@@ -1223,34 +1240,32 @@ class OctoChannel(BaseChannel):
 
     def _mentioned(self, text: str, payload: dict[str, Any]) -> bool:
         mention = payload.get("mention") if isinstance(payload, dict) else None
-        uids: list[str] = []
         if isinstance(mention, dict):
-            if (
-                self._robot_id in [str(uid) for uid in mention.get("uids", [])]
-                if isinstance(mention.get("uids"), list)
-                else False
-            ):
-                return True
             raw_uids = mention.get("uids")
-            if isinstance(raw_uids, list):
-                uids.extend(str(u) for u in raw_uids if u)
+            uids = (
+                [str(uid) for uid in raw_uids if uid]
+                if isinstance(raw_uids, list)
+                else []
+            )
+            if self._robot_id and self._robot_id in uids:
+                return True
             if mention.get("all") in (1, True) or mention.get("humans") in (1, True):
                 if self._config.ignore_mention_all:
                     return False
                 return True
-        if self._robot_id and self._robot_id in uids:
-            return True
+            if uids:
+                return False
         # Fallback: the bot's name appears as @name in the text.
-        return bool(self._robot_id and f"@{self._robot_id}" in text) or bool(
-            self._mention_name_re and self._mention_name_re.search(text)
-        )
+        return bool(
+            self._robot_id and re.search(rf"@{re.escape(self._robot_id)}(?!\w)", text)
+        ) or bool(self._mention_name_re and self._mention_name_re.search(text))
 
     @property
     def _mention_name_re(self) -> re.Pattern[str] | None:
         robot_name = getattr(self, "_robot_name", "")
         if not robot_name:
             return None
-        return re.compile(rf"@{re.escape(robot_name)}")
+        return re.compile(rf"@{re.escape(robot_name)}(?!\w)")
 
     def _strip_self_mention(self, text: str) -> str:
         names = [

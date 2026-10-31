@@ -6,7 +6,7 @@
 
 **支持 Linux 和 macOS，已实测可用。**
 
-**1.1.0** 支持配合 `octop-social-trigger` 选择性参与群聊普通消息，并拦截被撤回的输入及其待发回复。Windows 状态锁和在线通道检查修复见[测试说明](docs/WINDOWS_TESTING.md)。
+**1.1.1** 修复群聊中机器人消息触发回复、@ 名称前缀误匹配，以及旧版 Gateway 配置兼容问题。群聊自动参与需安装 [`octop-social-trigger`](https://github.com/ideshun/octop-social-trigger)。
 
 ## 环境要求
 
@@ -14,7 +14,7 @@ Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0
 
 ## 安装
 
-正式版：[v1.1.0 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.0) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.0/octop-channel-octo-1.1.0.zip)。
+正式版：[v1.1.1 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.1) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.1/octop-channel-octo-1.1.1.zip)。
 
 推荐通过 Octop Web 管理界面安装，任选一种方式。
 
@@ -61,7 +61,7 @@ octop plugin install /插件目录的绝对路径
 - **仅所有者可使用命令**：默认关闭；开启后只有 Bot 所有者能发送 `/` 命令。其他成员（含管理员）可继续聊天；满足群聊触发规则的命令会收到简短提示，不执行、不占用对话。普通聊天的工具权限由宿主控制，见下方边界说明。
 - **群聊白名单**：留空允许所有群聊；填写群或话题 ID，允许父群时也允许其话题。
 - **仅回复 @机器人的群消息**：默认开启。普通群消息不触发回复，启用上下文时仍可作为上下文保留；私聊不受此开关影响，管理员限制仍生效。
-- **群聊上下文条数**：默认 10，范围 0–100；0 关闭。
+- **群聊上下文条数**：每次最多附带的近期群消息数，默认 10，范围 0–100；0 关闭。自动参与还受策略插件的消息数和有效时间限制。此设置不清空专家已有会话历史。
 - **忽略 @所有人**：默认关闭；开启后不将 @所有人 作为触发依据。
 
 ### 连接

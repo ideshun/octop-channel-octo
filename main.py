@@ -78,7 +78,7 @@ def setup(ctx):
                 "label": "群聊上下文条数",
                 "defaultValue": "10",
                 "placeholder": "10",
-                "helpKey": "附带最近的群聊消息，0 关闭，范围 0–100。",
+                "helpKey": "每次最多附带的近期群消息数，0 关闭，范围 0–100；自动参与还受插件的消息数和有效时间限制。此设置不清空专家已有会话历史。",
             },
             {
                 "name": "ignore_mention_all",
