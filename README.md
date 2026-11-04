@@ -6,7 +6,7 @@
 
 **支持 Linux 和 macOS，已实测可用。**
 
-**1.1.1** 修复群聊中机器人消息触发回复、@ 名称前缀误匹配，以及旧版 Gateway 配置兼容问题。群聊自动参与需安装 [`octop-social-trigger`](https://github.com/ideshun/octop-social-trigger)。
+**1.1.2** 正确区分 @ 机器人和 @ 其他成员，让群聊自动参与策略跳过只 @ 他人的消息。群聊自动参与需安装 [`octop-social-trigger`](https://github.com/ideshun/octop-social-trigger)。
 
 ## 环境要求
 
@@ -14,7 +14,7 @@ Python 3.12+；Octop **1.0.2b9**、octop-gateway **1.0.3**、octop-harness **1.0
 
 ## 安装
 
-正式版：[v1.1.1 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.1) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.1/octop-channel-octo-1.1.1.zip)。
+正式版：[v1.1.2 发布说明](https://github.com/ideshun/octop-channel-octo/releases/tag/v1.1.2) · [下载插件 ZIP](https://github.com/ideshun/octop-channel-octo/releases/download/v1.1.2/octop-channel-octo-1.1.2.zip)。
 
 推荐通过 Octop Web 管理界面安装，任选一种方式。
 
