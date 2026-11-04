@@ -33,6 +33,7 @@ def test_text_mention_survives_normalization(tmp_path):
     assert native["text"] == "hello"
     parsed = obj.parse_inbound(native)
     assert parsed.metadata["bot_mentioned"] is True
+    assert parsed.metadata["has_mentions"] is True
     obj._inbox.close()
 
 
@@ -43,6 +44,17 @@ def test_mention_of_another_user_does_not_match_bot_name_prefix(tmp_path):
     assert not obj._mentioned("@助手甲 hello", {})
     assert obj._mentioned("@助手 hello", {})
     assert obj._mentioned("hello", {"mention": {"uids": ["bot"]}})
+    raw = message()
+    raw["payload"] = {"type": 1, "content": "@助手甲 hello"}
+    parsed = obj.parse_inbound(obj._native_message(raw))
+    assert parsed.metadata["has_mentions"] is True
+    assert parsed.metadata["bot_mentioned"] is False
+
+    raw = message()
+    raw["payload"] = {"type": 1, "content": "hello", "mention": {"uids": ["other"]}}
+    parsed = obj.parse_inbound(obj._native_message(raw))
+    assert parsed.metadata["has_mentions"] is True
+    assert parsed.metadata["bot_mentioned"] is False
     obj._inbox.close()
 
 

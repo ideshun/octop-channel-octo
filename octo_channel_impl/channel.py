@@ -892,6 +892,12 @@ class OctoChannel(BaseChannel):
 
         # DM subject = peer user; group subject = the conversation.
         subject_id = channel_id if is_group else from_uid
+        mention = payload.get("mention")
+        has_mentions = mentioned or bool(re.search(r"(?:^|\s)@\S+", text))
+        if isinstance(mention, dict):
+            has_mentions = has_mentions or bool(
+                mention.get("uids") or mention.get("all") or mention.get("humans")
+            )
         metadata: dict[str, Any] = {
             "chat_type": "group" if is_group else "dm",
             "chat_id": channel_id if is_group else from_uid,
@@ -902,6 +908,7 @@ class OctoChannel(BaseChannel):
             "message_id": str(data.get("message_id") or ""),
             "bot_mentioned": mentioned,
             "via": data.get("via", "ws"),
+            "has_mentions": has_mentions,
             "inbox_key": data.get("inbox_key", ""),
             # Trust anchors for host-side access control. ``sender_is_owner`` is
             # derived from the platform-registered bot owner UID (NOT from the
