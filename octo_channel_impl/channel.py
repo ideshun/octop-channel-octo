@@ -63,6 +63,16 @@ _NON_MESSAGE_EVENT_TYPES = frozenset(
 )
 
 
+def as_channel_type(value: Any) -> int:
+    """Session metadata may contain a channel name instead of a protocol int."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
 def _state_directory(override: str = "") -> Path:
     """Resolve persistent storage without deriving paths from credentials."""
     if override:
@@ -442,14 +452,17 @@ class OctoChannel(BaseChannel):
         metadata = message.metadata or {}
         message_id = str(metadata.get("message_id") or "")
         inbox = getattr(self, "_inbox", None)
-        return bool(
-            message_id
-            and inbox
-            and inbox.is_retracted(
-                self._robot_id + ":" + message_id,
-                str(metadata.get("channel_id_native") or metadata.get("chat_id") or ""),
-                int(metadata.get("channel_type") or 0),
-            )
+        if not message_id or not inbox:
+            return False
+        channel_type = as_channel_type(metadata.get("channel_type"))
+        if not channel_type and isinstance(message, ChannelSubject):
+            _, channel_type = self._target_of(message)
+        # Recall scope uses the inbound native ID, which differs from the
+        # outbound peer UID in DMs. Only infer the missing protocol type.
+        return inbox.is_retracted(
+            self._robot_id + ":" + message_id,
+            str(metadata.get("channel_id_native") or metadata.get("chat_id") or ""),
+            channel_type,
         )
 
     def _forget_context_message(self, chat: str, message_id: str) -> None:
@@ -1209,7 +1222,7 @@ class OctoChannel(BaseChannel):
 
     def _target_of(self, subject: ChannelSubject) -> tuple[str, int]:
         meta = subject.metadata or {}
-        channel_type = int(meta.get("channel_type") or 0)
+        channel_type = as_channel_type(meta.get("channel_type"))
         if subject.chat_type == "group" or channel_type in (
             octo_api.CHANNEL_GROUP,
             octo_api.CHANNEL_THREAD,
